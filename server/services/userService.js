@@ -3,7 +3,7 @@ const { query } = require('../config/database');
 
 async function listUsers() {
   const res = await query(
-    `SELECT id, username, role, is_active, created_at FROM users ORDER BY role, username`
+    `SELECT id, username, role, is_active, created_at FROM users WHERE is_hidden = FALSE ORDER BY role, username`
   );
   return res.rows;
 }
