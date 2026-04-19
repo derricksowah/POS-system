@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS sales (
     cashier_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     status          VARCHAR(20) NOT NULL DEFAULT 'completed' CHECK (status IN ('completed', 'edited', 'voided')),
     notes           TEXT,
+    amount_tendered NUMERIC(12,2),
+    change_due      NUMERIC(12,2),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_by      INTEGER REFERENCES users(id) ON DELETE SET NULL

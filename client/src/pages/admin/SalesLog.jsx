@@ -220,7 +220,7 @@ export default function SalesLog() {
               </tbody>
               <tfoot>
                 <tr><td colSpan={3} style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700 }}>Grand Total:</td>
-                  <td style={{ padding: '0.5rem', fontWeight: 700, color: 'var(--primary)' }}>{formatCurrency(detailSale.grand_total, currency)}</td></tr>
+                  <td style={{ padding: '0.5rem', fontWeight: 700 }}>{formatCurrency(detailSale.grand_total, currency)}</td></tr>
               </tfoot>
             </table>
             {detailSale.notes && <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Notes: {detailSale.notes}</p>}

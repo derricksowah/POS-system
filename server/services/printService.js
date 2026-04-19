@@ -318,6 +318,24 @@ async function printReceipt(sale, settings = {}) {
   printer.println(`TOTAL: ${currency} ${fmt(total)}`);
   printer.setTextNormal();
   printer.bold(false);
+
+  // ── CASH TENDERED / CHANGE ─────────────────────────────────────────────────
+  const tendered = sale.amount_tendered != null ? Number(sale.amount_tendered) : null;
+  if (tendered != null) {
+    const changeDue = sale.change_due != null ? Number(sale.change_due) : Math.max(0, tendered - total);
+    printer.alignLeft();
+    printer.tableCustom([
+      { text: 'Cash Tendered:', align: 'LEFT', width: 0.55 },
+      { text: `${currency} ${fmt(tendered)}`, align: 'RIGHT', width: 0.45 },
+    ]);
+    printer.bold(true);
+    printer.tableCustom([
+      { text: 'Change:', align: 'LEFT', width: 0.55 },
+      { text: `${currency} ${fmt(changeDue)}`, align: 'RIGHT', width: 0.45 },
+    ]);
+    printer.bold(false);
+  }
+  printer.alignCenter();
   printer.println(DASH);
 
   // ── FOOTER ─────────────────────────────────────────────────────────────────

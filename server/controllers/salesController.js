@@ -5,8 +5,9 @@ const { HTTP_STATUS } = require('../config/constants');
 async function createSale(req, res, next) {
   try {
     const sale = await salesService.createSale({
-      cashierId: req.user.id,
-      items:     req.body.items,
+      cashierId:       req.user.id,
+      items:           req.body.items,
+      amount_tendered: req.body.amount_tendered,
     });
     await logActivity({
       userId: req.user.id, action: 'CREATE_SALE',

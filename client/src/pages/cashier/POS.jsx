@@ -24,6 +24,7 @@ export default function POS() {
   const [printerList, setPrinterList] = useState([]);
   const [detectingPrinters, setDetecting] = useState(false);
   const [printerSectionOpen, setPrinterSectionOpen] = useState(false);
+  const [amountTendered, setAmountTendered] = useState('');
 
   useEffect(() => {
     getProducts({ limit: 500 }).then(({ products: p }) => setProducts(p));
@@ -50,7 +51,7 @@ export default function POS() {
       if (existing) {
         return prev.map((i) =>
           i.product_id === product.id
-            ? { ...i, quantity: Number((i.quantity + 1).toFixed(4)) }
+            ? { ...i, quantity: Number((i.quantity + 0.5).toFixed(1)) }
             : i
         );
       }
@@ -60,7 +61,7 @@ export default function POS() {
         product_code: product.code,
         unit: product.unit,
         unit_price: Number(product.price),
-        quantity: 1,
+        quantity: 0.5,
         current_stock: Number(product.current_stock),
       }];
     });
@@ -68,17 +69,23 @@ export default function POS() {
     searchRef.current?.focus();
   }, []);
 
+  const validateQuantity = (q) => {
+    const num = Number(q);
+    // Check if it's a whole number or ends in .5
+    return num === Math.floor(num) || num === Math.floor(num) + 0.5;
+  };
+
   const updateQty = (productId, qty) => {
     const q = Number(qty);
     if (q <= 0) {
       setCart((prev) => prev.filter((i) => i.product_id !== productId));
-    } else {
+    } else if (validateQuantity(q)) {
       setCart((prev) => prev.map((i) => i.product_id === productId ? { ...i, quantity: q } : i));
     }
   };
 
   const removeItem = (productId) => setCart((prev) => prev.filter((i) => i.product_id !== productId));
-  const clearCart = () => { setCart([]); setSearch(''); searchRef.current?.focus(); };
+  const clearCart = () => { setCart([]); setSearch(''); setAmountTendered(''); searchRef.current?.focus(); };
 
   const handleDetectPrinters = async () => {
     setDetecting(true);
@@ -120,8 +127,12 @@ export default function POS() {
     // Snapshot cart before clearing so we can deduct stock optimistically
     const soldItems = [...cart];
     try {
+      const tendered = amountTendered !== '' ? Number(amountTendered) : null;
       const [sale, freshSettings] = await Promise.all([
-        createSale(soldItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price }))),
+        createSale(
+          soldItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price })),
+          tendered
+        ),
         getSettings(),
       ]);
       sale.cashier_name = user.username;
@@ -406,17 +417,17 @@ export default function POS() {
                   {/* Quantity control */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                     <button
-                      onClick={() => updateQty(item.product_id, item.quantity - 1)}
+                      onClick={() => updateQty(item.product_id, Number((item.quantity - 0.5).toFixed(1)))}
                       style={{ width: 28, height: 28, border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg)', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}
                     >−</button>
                     <input
-                      type="number" min="0.01" step="0.01"
+                      type="number" min="0.5" step="0.5"
                       value={item.quantity}
                       onChange={(e) => updateQty(item.product_id, e.target.value)}
                       style={{ width: 60, textAlign: 'center', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 4px', fontSize: '0.88rem' }}
                     />
                     <button
-                      onClick={() => updateQty(item.product_id, item.quantity + 1)}
+                      onClick={() => updateQty(item.product_id, Number((item.quantity + 0.5).toFixed(1)))}
                       disabled={item.quantity >= item.current_stock}
                       style={{ width: 28, height: 28, border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg)', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}
                     >+</button>
@@ -445,6 +456,54 @@ export default function POS() {
               {formatCurrency(grandTotal, currency)}
             </span>
           </div>
+
+          {/* Cash tendered */}
+          {cart.length > 0 && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                Cash Tendered ({currency})
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder={`0.00`}
+                value={amountTendered}
+                onChange={(e) => setAmountTendered(e.target.value)}
+                style={{
+                  width: '100%', padding: '0.5rem 0.6rem', fontSize: '1rem',
+                  border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
+                  textAlign: 'right', fontWeight: 600,
+                }}
+              />
+              {amountTendered !== '' && Number(amountTendered) >= grandTotal && (
+                <div style={{
+                  marginTop: '0.4rem', padding: '0.4rem 0.6rem',
+                  background: '#f0fdf4', border: '1px solid #bbf7d0',
+                  borderRadius: 'var(--radius)', display: 'flex',
+                  justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#166534' }}>Change</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: '#166534' }}>
+                    {formatCurrency(Number(amountTendered) - grandTotal, currency)}
+                  </span>
+                </div>
+              )}
+              {amountTendered !== '' && Number(amountTendered) > 0 && Number(amountTendered) < grandTotal && (
+                <div style={{
+                  marginTop: '0.4rem', padding: '0.4rem 0.6rem',
+                  background: '#fff7ed', border: '1px solid #fed7aa',
+                  borderRadius: 'var(--radius)', display: 'flex',
+                  justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#9a3412' }}>Short by</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: '#9a3412' }}>
+                    {formatCurrency(grandTotal - Number(amountTendered), currency)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           <button
             className="btn btn-success btn-block btn-lg"

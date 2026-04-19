@@ -15,7 +15,7 @@ const refreshToken = Joi.object({
 });
 
 const product = Joi.object({
-  code:                Joi.string().trim().max(50).required(),
+  code:                Joi.string().trim().max(50).optional(),
   name:                Joi.string().trim().max(200).required(),
   price:               Joi.number().min(0).required(),
   unit:                Joi.string().trim().max(50).default('pcs'),
@@ -45,7 +45,8 @@ const saleItem = Joi.object({
 });
 
 const createSale = Joi.object({
-  items: Joi.array().items(saleItem).min(1).required(),
+  items:           Joi.array().items(saleItem).min(1).required(),
+  amount_tendered: Joi.number().min(0).optional().allow(null),
 });
 
 const editSale = Joi.object({

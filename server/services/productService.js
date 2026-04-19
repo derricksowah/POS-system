@@ -56,12 +56,19 @@ async function getById(id) {
   return res.rows[0] || null;
 }
 
-async function create({ code, name, price, unit, opening_stock, low_stock_threshold }) {
+async function create({ name, price, unit, opening_stock, low_stock_threshold }) {
   return withTransaction(async (client) => {
+    // Generate auto-incrementing product code
+    const codeRes = await client.query(`
+      SELECT COUNT(*) AS total FROM products
+    `);
+    const nextNumber = parseInt(codeRes.rows[0].total) + 1;
+    const autoCode = `P${String(nextNumber).padStart(4, '0')}`;
+
     const res = await client.query(`
       INSERT INTO products (code, name, price, unit, opening_stock, low_stock_threshold)
       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
-    `, [code.toUpperCase(), name, price, unit, opening_stock, low_stock_threshold]);
+    `, [autoCode, name, price, unit, opening_stock, low_stock_threshold]);
     const product = res.rows[0];
 
     // Initialize stock

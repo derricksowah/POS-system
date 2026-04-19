@@ -6,12 +6,9 @@ const { SALE_STATUS } = require('../config/constants');
  * Create a new sale. All stock deductions happen inside one transaction
  * with row-level locking to prevent overselling.
  */
-async function createSale({ cashierId, items }) {
+async function createSale({ cashierId, items, amount_tendered }) {
   return withTransaction(async (client) => {
-    // 1. Generate receipt number (uses sequence — safe for concurrency)
-    const receiptNumber = await generateReceiptNumber(client);
-
-    // 2. Validate and lock stock for each product
+    // 1. Validate and lock stock for each product
     for (const item of items) {
       const stockRes = await client.query(
         `SELECT s.quantity, p.name, p.is_active, p.price
@@ -31,13 +28,32 @@ async function createSale({ cashierId, items }) {
       }
     }
 
-    // 3. Insert sale record
-    const saleRes = await client.query(`
-      INSERT INTO sales (receipt_number, cashier_id, status)
-      VALUES ($1, $2, 'completed')
-      RETURNING id, receipt_number, created_at
-    `, [receiptNumber, cashierId]);
-    const sale = saleRes.rows[0];
+    // 2. Insert sale record — retry up to 5 times if receipt number collides
+    const tendered = (amount_tendered != null && Number(amount_tendered) > 0) ? Number(amount_tendered) : null;
+    let sale;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const receiptNumber = await generateReceiptNumber(client);
+      try {
+        await client.query('SAVEPOINT receipt_insert');
+        const saleRes = await client.query(`
+          INSERT INTO sales (receipt_number, cashier_id, status, amount_tendered)
+          VALUES ($1, $2, 'completed', $3)
+          RETURNING id, receipt_number, created_at
+        `, [receiptNumber, cashierId, tendered]);
+        sale = saleRes.rows[0];
+        await client.query('RELEASE SAVEPOINT receipt_insert');
+        break;
+      } catch (err) {
+        if (err.code === '23505' && err.constraint === 'sales_receipt_number_key') {
+          await client.query('ROLLBACK TO SAVEPOINT receipt_insert');
+        } else {
+          throw err;
+        }
+      }
+    }
+    if (!sale) throw Object.assign(new Error('Could not generate a unique receipt number. Please try again.'), { status: 500 });
+
+    const receiptNumber = sale.receipt_number;
 
     // 4. Insert sale items + deduct stock
     const saleItems = [];
@@ -69,7 +85,20 @@ async function createSale({ cashierId, items }) {
     }
 
     // 5. Return full receipt data
-    return await getSaleById(sale.id, client);
+    const fullSale = await getSaleById(sale.id, client);
+
+    // 6. Now that we know grand_total, compute and store change_due
+    if (tendered != null) {
+      const changeDue = Math.max(0, tendered - Number(fullSale.grand_total));
+      await client.query(
+        `UPDATE sales SET change_due = $1 WHERE id = $2`,
+        [changeDue, sale.id]
+      );
+      fullSale.change_due = changeDue;
+      fullSale.amount_tendered = tendered;
+    }
+
+    return fullSale;
   });
 }
 
@@ -81,7 +110,7 @@ async function getSaleById(id, client) {
 
   const saleRes = await db.query(`
     SELECT s.id, s.receipt_number, s.status, s.notes, s.created_at, s.updated_at,
-           s.cashier_id,
+           s.cashier_id, s.amount_tendered, s.change_due,
            u.username AS cashier_name,
            ue.username AS edited_by
     FROM sales s

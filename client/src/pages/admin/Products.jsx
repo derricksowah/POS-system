@@ -11,7 +11,7 @@ import { formatCurrency, getErrorMessage } from '../../utils/formatters.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import toast from 'react-hot-toast';
 
-const EMPTY = { code: '', name: '', price: '', unit: 'pcs', opening_stock: '', low_stock_threshold: '5' };
+const EMPTY = { name: '', price: '', unit: 'pcs', opening_stock: '', low_stock_threshold: '5' };
 
 export default function Products() {
   const { settings }         = useSettings();
@@ -41,7 +41,7 @@ export default function Products() {
   const openCreate = () => { setEditing(null); setForm(EMPTY); setModalOpen(true); };
   const openEdit   = (p) => {
     setEditing(p);
-    setForm({ code: p.code, name: p.name, price: p.price, unit: p.unit, opening_stock: p.opening_stock, low_stock_threshold: p.low_stock_threshold });
+    setForm({ name: p.name, price: p.price, unit: p.unit, opening_stock: p.opening_stock, low_stock_threshold: p.low_stock_threshold });
     setModalOpen(true);
   };
 
@@ -193,22 +193,24 @@ export default function Products() {
         }
       >
         <form id="product-form" onSubmit={handleSave}>
-          <div className="form-grid form-grid-2" style={{ marginBottom: '1rem' }}>
-            <div className="form-group">
-              <label className="form-label">Product Code *</label>
-              <input className="form-input" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })}
-                required disabled={!!editing} placeholder="e.g. P001" />
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Product Name *</label>
+            <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required placeholder="Full product name" />
+          </div>
+          {editing && (
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <label className="form-label">Product Code</label>
+              <input className="form-input" value={editing.code} disabled style={{ backgroundColor: 'var(--bg-muted)', cursor: 'not-allowed' }} />
+              <span className="form-hint">Auto-generated code cannot be changed.</span>
             </div>
+          )}
+          <div className="form-grid form-grid-2" style={{ marginBottom: '1rem' }}>
             <div className="form-group">
               <label className="form-label">Unit *</label>
               <input className="form-input" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}
                 required placeholder="pcs, bottle, kg..." />
             </div>
-          </div>
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
-            <label className="form-label">Product Name *</label>
-            <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required placeholder="Full product name" />
           </div>
           <div className="form-grid form-grid-3">
             <div className="form-group">
