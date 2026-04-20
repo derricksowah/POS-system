@@ -52,14 +52,14 @@ app.use(helmet({
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map(s => s.trim());
 app.use(cors({
   origin: (origin, cb) => {
-    // Reject requests with no Origin header from browsers (except server-to-server
-    // calls in test environments). Non-browser clients don't send Origin.
     if (!origin) {
-      // Allow only in test or if explicitly permitted (e.g. Postman in dev)
       if (process.env.NODE_ENV !== 'production') return cb(null, true);
       return cb(new Error('CORS: requests without an Origin header are not allowed in production.'));
     }
+    // Allow exact matches from CLIENT_URL list
     if (allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow all Vercel preview deployments for this project
+    if (origin.match(/^https:\/\/pos-system-.*\.vercel\.app$/)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed.`));
   },
   credentials: true,
