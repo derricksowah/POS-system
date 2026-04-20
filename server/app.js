@@ -87,7 +87,7 @@ app.use('/api/', apiLimiter);
 
 // ── Serve uploaded files (logo, etc.) ────────────────────────
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (process.env.VERCEL !== '1' && !fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 // Serve with nosniff and no-cache so browsers don't execute uploaded content
 app.use('/uploads', (req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
