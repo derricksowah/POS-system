@@ -58,8 +58,8 @@ app.use(cors({
     }
     // Allow exact matches from CLIENT_URL list
     if (allowedOrigins.includes(origin)) return cb(null, true);
-    // Allow all Vercel preview deployments for this project
-    if (origin.match(/^https:\/\/pos-system-.*\.vercel\.app$/)) return cb(null, true);
+    // Allow all Vercel deployments for this project
+    if (origin.match(/^https:\/\/pos-system[-a-z0-9]*\.vercel\.app$/)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed.`));
   },
   credentials: true,
