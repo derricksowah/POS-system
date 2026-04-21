@@ -15,10 +15,12 @@ export function printReceipt(sale, settings = {}) {
 
   const itemRows = items.map((item) => `
     <tr>
-      <td class="name">${escHtml(item.product_name ?? '')}</td>
-      <td class="num">${fmt(item.quantity)}</td>
-      <td class="num">${fmt(item.unit_price)}</td>
-      <td class="num bold">${fmt(item.subtotal)}</td>
+      <td class="item-name">${escHtml(item.product_name ?? '')}</td>
+      <td class="item-amt">${fmt(item.subtotal)}</td>
+    </tr>
+    <tr class="item-detail-row">
+      <td class="item-detail">${fmt(item.quantity)} x ${fmt(item.unit_price)}</td>
+      <td></td>
     </tr>
   `).join('');
 
@@ -44,6 +46,7 @@ export function printReceipt(sale, settings = {}) {
       width: 70mm;
       font-family: 'Courier New', Courier, monospace;
       font-size: 11pt;
+      font-weight: bold;
       color: #000;
       background: #fff;
       -webkit-print-color-adjust: exact;
@@ -105,7 +108,7 @@ export function printReceipt(sale, settings = {}) {
     .items {
       width: 100%;
       border-collapse: collapse;
-      font-size: 10pt;
+      font-size: 11pt;
     }
     .items th {
       font-weight: bold;
@@ -113,13 +116,23 @@ export function printReceipt(sale, settings = {}) {
       border-bottom: 2px solid #000;
       padding: 1.5mm 0;
     }
-    .items td {
-      padding: 1.5mm 0;
-      vertical-align: top;
+    .item-name {
+      font-weight: bold;
+      padding: 2mm 0 0 0;
+      word-break: break-word;
     }
-    .name { width: 36mm; word-break: break-word; }
-    .num  { text-align: right; }
-    .bold { font-weight: bold; }
+    .item-amt {
+      font-weight: bold;
+      text-align: right;
+      padding: 2mm 0 0 0;
+      white-space: nowrap;
+    }
+    .item-detail {
+      font-size: 9.5pt;
+      color: #000;
+      padding: 0 0 2mm 0;
+    }
+    .item-detail-row td { border-bottom: 1px dashed #ccc; }
 
     /* ── Count line ── */
     .count-line {
@@ -173,10 +186,8 @@ export function printReceipt(sale, settings = {}) {
   <table class="items">
     <thead>
       <tr>
-        <th class="name">ITEM</th>
-        <th class="num">QTY</th>
-        <th class="num">PRICE</th>
-        <th class="num">AMT</th>
+        <th style="text-align:left">ITEM</th>
+        <th style="text-align:right">AMOUNT</th>
       </tr>
     </thead>
     <tbody>
