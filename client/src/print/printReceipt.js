@@ -35,113 +35,114 @@ export function printReceipt(sale, settings = {}) {
     /* ── Page setup for 80mm thermal paper ── */
     @page {
       size: 80mm auto;
-      margin: 3mm 4mm;
+      margin: 4mm 5mm;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 72mm;           /* 80mm - 4mm margins each side */
+      width: 70mm;
       font-family: 'Courier New', Courier, monospace;
-      font-size: 9.5pt;
+      font-size: 11pt;
       color: #000;
       background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     /* ── Logo ── */
     .logo {
       display: block;
-      max-width: 28mm;
-      max-height: 18mm;
+      max-width: 30mm;
+      max-height: 20mm;
       margin: 0 auto 3mm;
       object-fit: contain;
     }
 
     /* ── Header ── */
-    .center   { text-align: center; }
     .shop-name {
-      font-size: 13pt;
+      font-size: 15pt;
       font-weight: bold;
       text-align: center;
-      margin-bottom: 1mm;
+      margin-bottom: 1.5mm;
+      letter-spacing: 0.04em;
     }
     .sub {
-      font-size: 8pt;
+      font-size: 10pt;
       text-align: center;
-      line-height: 1.45;
+      line-height: 1.6;
     }
     .header-note {
-      font-size: 8pt;
+      font-size: 9.5pt;
       font-style: italic;
       text-align: center;
-      margin-top: 1.5mm;
+      margin-top: 2mm;
     }
 
     /* ── Dividers ── */
-    .solid  { border-top: 1px solid #000; margin: 2.5mm 0; }
-    .dashed { border-top: 1px dashed #000; margin: 2.5mm 0; }
+    .solid  { border-top: 2px solid #000; margin: 3mm 0; }
+    .dashed { border-top: 1px dashed #000; margin: 3mm 0; }
 
     /* ── Title ── */
     .receipt-title {
       text-align: center;
-      font-size: 10pt;
+      font-size: 12pt;
       font-weight: bold;
-      letter-spacing: 0.05em;
-      margin-bottom: 1mm;
+      letter-spacing: 0.08em;
+      margin-bottom: 1.5mm;
     }
 
     /* ── Meta (receipt #, date, cashier) ── */
     .meta-table {
       width: 100%;
-      font-size: 8.5pt;
+      font-size: 10pt;
       border-collapse: collapse;
     }
-    .meta-table td { padding: 0.6mm 0; }
-    .meta-table .label { font-weight: bold; width: 22mm; }
+    .meta-table td { padding: 1mm 0; }
+    .meta-table .label { font-weight: bold; width: 24mm; }
 
     /* ── Items table ── */
     .items {
       width: 100%;
       border-collapse: collapse;
-      font-size: 8.5pt;
+      font-size: 10pt;
     }
     .items th {
       font-weight: bold;
-      border-top: 1px solid #000;
-      border-bottom: 1px solid #000;
-      padding: 1mm 0;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      padding: 1.5mm 0;
     }
     .items td {
-      padding: 1mm 0;
+      padding: 1.5mm 0;
       vertical-align: top;
     }
-    .items tr + tr td { border-top: none; }
-    .name { width: 38mm; word-break: break-word; }
+    .name { width: 36mm; word-break: break-word; }
     .num  { text-align: right; }
     .bold { font-weight: bold; }
 
     /* ── Count line ── */
     .count-line {
-      font-size: 8pt;
-      margin-bottom: 2mm;
+      font-size: 9.5pt;
+      margin-bottom: 2.5mm;
     }
 
     /* ── Total box ── */
     .total-box {
-      border: 1.5px solid #000;
-      padding: 2mm 2.5mm;
+      border: 2px solid #000;
+      padding: 2.5mm 3mm;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 2.5mm;
+      margin-bottom: 3mm;
     }
-    .total-label { font-size: 10pt; font-weight: bold; }
-    .total-amount { font-size: 10pt; font-weight: bold; }
+    .total-label  { font-size: 13pt; font-weight: bold; }
+    .total-amount { font-size: 13pt; font-weight: bold; }
 
     /* ── Footer ── */
-    .footer { font-size: 8pt; text-align: center; line-height: 1.6; margin-top: 1mm; }
+    .footer { font-size: 9.5pt; text-align: center; line-height: 1.7; margin-top: 2mm; }
     .footer .italic { font-style: italic; }
-    .footer .stars  { font-size: 7.5pt; }
+    .footer .stars  { font-size: 9pt; letter-spacing: 0.1em; }
   </style>
 </head>
 <body>
