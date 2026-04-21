@@ -21,6 +21,7 @@ export default function POS() {
   const [alertOpen, setAlertOpen] = useState(true);
   const searchRef = useRef(null);
   const [amountTendered, setAmountTendered] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
 
   useEffect(() => {
     getProducts({ limit: 500 }).then(({ products: p }) => setProducts(p));
@@ -81,7 +82,7 @@ export default function POS() {
   };
 
   const removeItem = (productId) => setCart((prev) => prev.filter((i) => i.product_id !== productId));
-  const clearCart = () => { setCart([]); setSearch(''); setAmountTendered(''); searchRef.current?.focus(); };
+  const clearCart = () => { setCart([]); setSearch(''); setAmountTendered(''); setPaymentMethod('cash'); searchRef.current?.focus(); };
 
   const grandTotal = cart.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
@@ -99,15 +100,22 @@ export default function POS() {
   const confirmSale = async () => {
     if (cart.length === 0) { toast.error('Cart is empty.'); return; }
     if (!validate()) return;
+    if (paymentMethod === 'cash' && (amountTendered === '' || Number(amountTendered) <= 0)) {
+      toast.error('Please enter the cash amount tendered.'); return;
+    }
+    if (paymentMethod === 'cash' && Number(amountTendered) < grandTotal) {
+      toast.error('Cash tendered is less than the total amount.'); return;
+    }
 
     setConfirming(true);
     const soldItems = [...cart];
     try {
-      const tendered = amountTendered !== '' ? Number(amountTendered) : null;
+      const tendered = paymentMethod === 'cash' ? Number(amountTendered) : null;
       const [sale, freshSettings] = await Promise.all([
         createSale(
           soldItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price })),
-          tendered
+          tendered,
+          paymentMethod
         ),
         getSettings(),
       ]);
@@ -340,26 +348,50 @@ export default function POS() {
             </span>
           </div>
 
-          {/* Cash tendered */}
+          {/* Payment method + cash tendered */}
           {cart.length > 0 && (
             <div style={{ marginBottom: '0.75rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+              {/* Payment toggle */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                {['cash', 'momo'].map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentMethod(method)}
+                    style={{
+                      flex: 1, padding: '0.45rem', fontWeight: 700, fontSize: '0.85rem',
+                      border: `2px solid ${paymentMethod === method ? (method === 'momo' ? '#f59e0b' : 'var(--primary)') : 'var(--border)'}`,
+                      borderRadius: 'var(--radius)', cursor: 'pointer',
+                      background: paymentMethod === method ? (method === 'momo' ? '#fef3c7' : '#e8f0fe') : 'var(--bg)',
+                      color: paymentMethod === method ? (method === 'momo' ? '#92400e' : 'var(--primary)') : 'var(--text-muted)',
+                    }}
+                  >
+                    {method === 'cash' ? '💵 Cash' : '📱 MoMo'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Cash tendered — greyed out for MoMo */}
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: paymentMethod === 'momo' ? 'var(--text-muted)' : 'var(--text)', display: 'block', marginBottom: '0.3rem' }}>
                 Cash Tendered ({currency})
               </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder={`0.00`}
-                value={amountTendered}
+                placeholder="0.00"
+                value={paymentMethod === 'momo' ? '' : amountTendered}
                 onChange={(e) => setAmountTendered(e.target.value)}
+                disabled={paymentMethod === 'momo'}
                 style={{
                   width: '100%', padding: '0.5rem 0.6rem', fontSize: '1rem',
                   border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
                   textAlign: 'right', fontWeight: 600,
+                  background: paymentMethod === 'momo' ? 'var(--bg)' : '#fff',
+                  color: paymentMethod === 'momo' ? 'var(--text-muted)' : 'var(--text)',
+                  cursor: paymentMethod === 'momo' ? 'not-allowed' : 'text',
                 }}
               />
-              {amountTendered !== '' && Number(amountTendered) >= grandTotal && (
+              {paymentMethod === 'cash' && amountTendered !== '' && Number(amountTendered) >= grandTotal && (
                 <div style={{
                   marginTop: '0.4rem', padding: '0.4rem 0.6rem',
                   background: '#f0fdf4', border: '1px solid #bbf7d0',
@@ -372,7 +404,7 @@ export default function POS() {
                   </span>
                 </div>
               )}
-              {amountTendered !== '' && Number(amountTendered) > 0 && Number(amountTendered) < grandTotal && (
+              {paymentMethod === 'cash' && amountTendered !== '' && Number(amountTendered) > 0 && Number(amountTendered) < grandTotal && (
                 <div style={{
                   marginTop: '0.4rem', padding: '0.4rem 0.6rem',
                   background: '#fff7ed', border: '1px solid #fed7aa',
@@ -383,6 +415,15 @@ export default function POS() {
                   <span style={{ fontSize: '1rem', fontWeight: 800, color: '#9a3412' }}>
                     {formatCurrency(grandTotal - Number(amountTendered), currency)}
                   </span>
+                </div>
+              )}
+              {paymentMethod === 'momo' && (
+                <div style={{
+                  marginTop: '0.4rem', padding: '0.4rem 0.6rem',
+                  background: '#fef3c7', border: '1px solid #fcd34d',
+                  borderRadius: 'var(--radius)', fontSize: '0.82rem', fontWeight: 600, color: '#92400e',
+                }}>
+                  📱 MoMo payment — no change required
                 </div>
               )}
             </div>

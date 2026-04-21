@@ -6,7 +6,7 @@ const { SALE_STATUS } = require('../config/constants');
  * Create a new sale. All stock deductions happen inside one transaction
  * with row-level locking to prevent overselling.
  */
-async function createSale({ cashierId, items, amount_tendered }) {
+async function createSale({ cashierId, items, amount_tendered, payment_method = 'cash' }) {
   return withTransaction(async (client) => {
     // 1. Validate and lock stock for each product
     for (const item of items) {
@@ -36,10 +36,10 @@ async function createSale({ cashierId, items, amount_tendered }) {
       try {
         await client.query('SAVEPOINT receipt_insert');
         const saleRes = await client.query(`
-          INSERT INTO sales (receipt_number, cashier_id, status, amount_tendered)
-          VALUES ($1, $2, 'completed', $3)
+          INSERT INTO sales (receipt_number, cashier_id, status, amount_tendered, payment_method)
+          VALUES ($1, $2, 'completed', $3, $4)
           RETURNING id, receipt_number, created_at
-        `, [receiptNumber, cashierId, tendered]);
+        `, [receiptNumber, cashierId, tendered, payment_method]);
         sale = saleRes.rows[0];
         await client.query('RELEASE SAVEPOINT receipt_insert');
         break;
@@ -110,7 +110,7 @@ async function getSaleById(id, client) {
 
   const saleRes = await db.query(`
     SELECT s.id, s.receipt_number, s.status, s.notes, s.created_at, s.updated_at,
-           s.cashier_id, s.amount_tendered, s.change_due,
+           s.cashier_id, s.amount_tendered, s.change_due, s.payment_method,
            u.username AS cashier_name,
            ue.username AS edited_by
     FROM sales s

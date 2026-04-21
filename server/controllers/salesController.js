@@ -8,6 +8,7 @@ async function createSale(req, res, next) {
       cashierId:       req.user.id,
       items:           req.body.items,
       amount_tendered: req.body.amount_tendered,
+      payment_method:  req.body.payment_method || 'cash',
     });
     await logActivity({
       userId: req.user.id, action: 'CREATE_SALE',

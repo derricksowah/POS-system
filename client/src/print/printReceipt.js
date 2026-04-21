@@ -204,17 +204,21 @@ export function printReceipt(sale, settings = {}) {
     <span class="total-amount">${escHtml(currency)} ${fmt(total)}</span>
   </div>
 
-  ${sale.amount_tendered != null ? `
   <table class="meta-table" style="margin-bottom:2mm;">
+    <tr>
+      <td class="label">Payment</td>
+      <td style="text-align:right">${sale.payment_method === 'momo' ? 'Mobile Money (MoMo)' : 'Cash'}</td>
+    </tr>
+    ${sale.amount_tendered != null ? `
     <tr>
       <td class="label">Cash Tendered</td>
       <td style="text-align:right">${escHtml(currency)} ${fmt(Number(sale.amount_tendered))}</td>
     </tr>
     <tr>
-      <td class="label" style="font-weight:bold">Change</td>
-      <td style="text-align:right;font-weight:bold">${escHtml(currency)} ${fmt(Number(sale.change_due ?? Math.max(0, Number(sale.amount_tendered) - total)))}</td>
-    </tr>
-  </table>` : ''}
+      <td class="label">Change</td>
+      <td style="text-align:right">${escHtml(currency)} ${fmt(Number(sale.change_due ?? Math.max(0, Number(sale.amount_tendered) - total)))}</td>
+    </tr>` : ''}
+  </table>
 
   <div class="dashed"></div>
 
