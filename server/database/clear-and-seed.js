@@ -38,6 +38,8 @@ async function clearAndSeed() {
     // ============================================================
     console.log('6️⃣  Deleting all products...');
     await client.query('DELETE FROM products');
+    await client.query('CREATE SEQUENCE IF NOT EXISTS product_code_seq START 1 INCREMENT 1 NO CYCLE');
+    await client.query('ALTER SEQUENCE product_code_seq RESTART WITH 1');
 
     console.log('\n✅ All products and related data cleared!\n');
 
@@ -102,6 +104,15 @@ async function clearAndSeed() {
     // Reset product ID sequence to the next available ID
     const sequenceQuery = 'SELECT setval(pg_get_serial_sequence(\'products\', \'id\'), (SELECT MAX(id) FROM products) + 1)';
     await client.query(sequenceQuery);
+
+    await client.query(`
+      WITH next_code AS (
+        SELECT COALESCE(MAX(SUBSTRING(code FROM 2)::INTEGER), 0) + 1 AS value
+        FROM products
+        WHERE code ~ '^P[0-9]+$'
+      )
+      SELECT setval('product_code_seq', GREATEST((SELECT value FROM next_code), 1), false)
+    `);
 
     console.log('\n✅ Test products inserted successfully!\n');
 

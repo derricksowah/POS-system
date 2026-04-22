@@ -15,6 +15,21 @@ function notFound(req, res, next) {
 function errorHandler(err, req, res, next) {
   // PostgreSQL constraint violations — return safe messages, not raw DB errors
   if (err.code === '23505') {
+    const constraint = err.constraint || '';
+    const detail = err.detail || '';
+
+    if (constraint.includes('products_code') || detail.includes('(code)=')) {
+      return res.status(HTTP_STATUS.CONFLICT).json({
+        error: 'A product with that code already exists. Please try saving again.',
+      });
+    }
+
+    if (constraint.includes('products_name') || detail.includes('(name)=')) {
+      return res.status(HTTP_STATUS.CONFLICT).json({
+        error: 'A product with that name already exists.',
+      });
+    }
+
     return res.status(HTTP_STATUS.CONFLICT).json({ error: 'Duplicate entry. A record with that value already exists.' });
   }
   if (err.code === '23503') {

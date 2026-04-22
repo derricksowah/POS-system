@@ -7,6 +7,11 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
+-- PRODUCT CODE SEQUENCE
+-- ============================================================
+CREATE SEQUENCE IF NOT EXISTS product_code_seq START 1 INCREMENT 1 NO CYCLE;
+
+-- ============================================================
 -- USERS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS users (
@@ -48,12 +53,35 @@ CREATE TABLE IF NOT EXISTS products (
     low_stock_threshold NUMERIC(12, 2) NOT NULL DEFAULT 5 CHECK (low_stock_threshold >= 0),
     is_active           BOOLEAN NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at          TIMESTAMPTZ DEFAULT NULL
 );
+
+ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_products_code ON products(code);
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
+CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products(deleted_at);
+
+WITH current_sequence AS (
+    SELECT last_value, is_called FROM product_code_seq
+),
+next_code AS (
+    SELECT COALESCE(MAX(SUBSTRING(code FROM 2)::INTEGER), 0) + 1 AS value
+    FROM products
+    WHERE code ~ '^P[0-9]+$'
+)
+SELECT setval(
+    'product_code_seq',
+    GREATEST(
+        (SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END FROM current_sequence),
+        (SELECT value FROM next_code),
+        1
+    ),
+    false
+);
 
 -- ============================================================
 -- STOCK (current levels)

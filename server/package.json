@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "db:migrate": "node database/migrate.js",
+    "db:migrations": "node database/run-migrations.js",
     "db:seed": "node database/seed.js",
     "db:reset": "node database/reset.js"
   },

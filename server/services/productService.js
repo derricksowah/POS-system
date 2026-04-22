@@ -56,14 +56,44 @@ async function getById(id) {
   return res.rows[0] || null;
 }
 
+async function generateProductCode(client) {
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext('products_code_generation'))`);
+
+  await client.query(`
+    CREATE SEQUENCE IF NOT EXISTS product_code_seq START 1 INCREMENT 1 NO CYCLE
+  `);
+
+  await client.query(`
+    WITH current_sequence AS (
+      SELECT last_value, is_called FROM product_code_seq
+    ),
+    next_code AS (
+      SELECT COALESCE(MAX(SUBSTRING(code FROM 2)::INTEGER), 0) + 1 AS value
+      FROM products
+      WHERE code ~ '^P[0-9]+$'
+    )
+    SELECT setval(
+      'product_code_seq',
+      GREATEST(
+        (SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END FROM current_sequence),
+        (SELECT value FROM next_code),
+        1
+      ),
+      false
+    )
+  `);
+
+  const codeRes = await client.query(`
+    SELECT nextval('product_code_seq') AS next_number
+  `);
+  const nextNumber = parseInt(codeRes.rows[0].next_number, 10);
+
+  return `P${String(nextNumber).padStart(4, '0')}`;
+}
+
 async function create({ name, price, unit, opening_stock, low_stock_threshold }) {
   return withTransaction(async (client) => {
-    // Generate auto-incrementing product code
-    const codeRes = await client.query(`
-      SELECT COUNT(*) AS total FROM products
-    `);
-    const nextNumber = parseInt(codeRes.rows[0].total) + 1;
-    const autoCode = `P${String(nextNumber).padStart(4, '0')}`;
+    const autoCode = await generateProductCode(client);
 
     const res = await client.query(`
       INSERT INTO products (code, name, price, unit, opening_stock, low_stock_threshold)
