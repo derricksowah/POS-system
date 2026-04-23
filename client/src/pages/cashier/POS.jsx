@@ -156,7 +156,10 @@ export default function POS() {
   const selectPaymentMethod = (method) => {
     setPaymentMethod(method);
     if (method === 'cash') setMomoAmount('');
-    if (method === 'momo') setCashAmount('');
+    if (method === 'momo') {
+      setCashAmount('');
+      setMomoAmount('');
+    }
   };
   const clearCart = () => {
     setCart([]);
@@ -168,8 +171,12 @@ export default function POS() {
   };
 
   const grandTotal = cart.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unit_price), 0);
-  const totalPaid = (Number(cashAmount) || 0) + (Number(momoAmount) || 0);
-  const changeDue = Math.max(0, totalPaid - grandTotal);
+  const cashPaid = paymentMethod === 'momo' ? 0 : (Number(cashAmount) || 0);
+  const momoPaid = paymentMethod === 'momo'
+    ? grandTotal
+    : (paymentMethod === 'split' ? (Number(momoAmount) || 0) : 0);
+  const totalPaid = cashPaid + momoPaid;
+  const changeDue = paymentMethod === 'momo' ? 0 : Math.max(0, totalPaid - grandTotal);
 
   // Validate stock before confirming
   const validate = () => {
@@ -187,9 +194,6 @@ export default function POS() {
     if (!validate()) return;
     if (paymentMethod === 'cash' && (cashAmount === '' || Number(cashAmount) <= 0)) {
       toast.error('Please enter the cash amount tendered.'); return;
-    }
-    if (paymentMethod === 'momo' && (momoAmount === '' || Number(momoAmount) <= 0)) {
-      toast.error('Please enter the MoMo amount.'); return;
     }
     if (paymentMethod === 'split' && (Number(cashAmount) <= 0 || Number(momoAmount) <= 0)) {
       toast.error('Please enter both cash and MoMo amounts.'); return;
@@ -214,9 +218,9 @@ export default function POS() {
             discount_amount: Number(i.discount_amount || 0),
           })),
           payment_method: paymentMethod,
-          amount_tendered: Number(cashAmount) || null,
-          cash_amount: Number(cashAmount) || 0,
-          momo_amount: Number(momoAmount) || 0,
+          amount_tendered: cashPaid || null,
+          cash_amount: cashPaid,
+          momo_amount: momoPaid,
         }),
         getSettings(),
       ]);
@@ -526,7 +530,28 @@ export default function POS() {
                   </label>
                 )}
 
-                {(paymentMethod === 'momo' || paymentMethod === 'split') && (
+                {paymentMethod === 'momo' && (
+                  <div style={{
+                    padding: '0.55rem 0.65rem',
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: 'var(--radius)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    marginBottom: '0.3rem',
+                  }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#166534' }}>
+                      MoMo confirmed amount
+                    </span>
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#166534', whiteSpace: 'nowrap' }}>
+                      {formatCurrency(grandTotal, currency)}
+                    </span>
+                  </div>
+                )}
+
+                {paymentMethod === 'split' && (
                   <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: '0.3rem' }}>
                     MoMo ({currency})
                     <input
@@ -546,7 +571,7 @@ export default function POS() {
                 )}
               </div>
 
-              {totalPaid >= grandTotal && totalPaid > 0 && (
+              {paymentMethod !== 'momo' && totalPaid >= grandTotal && totalPaid > 0 && (
                 <div style={{
                   marginTop: '0.4rem', padding: '0.4rem 0.6rem',
                   background: '#f0fdf4', border: '1px solid #bbf7d0',
