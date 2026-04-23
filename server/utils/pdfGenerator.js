@@ -75,7 +75,7 @@ function generateSalesReportPDF(res, { title, dateRange, rows, totals, currency 
 /**
  * Generate an Inventory Report PDF.
  */
-function generateInventoryReportPDF(res, { title, rows }) {
+function generateInventoryReportPDF(res, { title, rows, currency = 'GHS' }) {
   const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -88,7 +88,7 @@ function generateInventoryReportPDF(res, { title, rows }) {
   doc.moveDown(1);
 
   // Column positions (landscape A4 = 841 wide)
-  const cols = { no: 30, code: 55, name: 110, open: 310, pur: 400, sold: 490, close: 580, status: 670 };
+  const cols = { no: 30, code: 55, name: 110, open: 290, pur: 370, sold: 450, close: 530, value: 610, status: 705 };
   const rowH = 18;
   let y = doc.y;
 
@@ -98,10 +98,11 @@ function generateInventoryReportPDF(res, { title, rows }) {
   doc.text('#',                  cols.no,    y, { width: 22 });
   doc.text('Product Code',       cols.code,  y, { width: 52 });
   doc.text('Product Name',       cols.name,  y, { width: 195 });
-  doc.text('Opening Balance',    cols.open,  y, { width: 85, align: 'right' });
-  doc.text('Purchases / In',     cols.pur,   y, { width: 85, align: 'right' });
-  doc.text('Sales / Out',        cols.sold,  y, { width: 85, align: 'right' });
-  doc.text('Closing Stock',      cols.close, y, { width: 85, align: 'right' });
+  doc.text('Opening',            cols.open,  y, { width: 75, align: 'right' });
+  doc.text('Purchases',          cols.pur,   y, { width: 75, align: 'right' });
+  doc.text('Sales',              cols.sold,  y, { width: 75, align: 'right' });
+  doc.text('Closing',            cols.close, y, { width: 75, align: 'right' });
+  doc.text(`Value (${currency})`, cols.value,y, { width: 90, align: 'right' });
   doc.text('Status',             cols.status,y, { width: 70 });
   y += rowH;
   doc.fillColor('#000000');
@@ -109,7 +110,7 @@ function generateInventoryReportPDF(res, { title, rows }) {
   // Data rows
   doc.font('Helvetica').fontSize(8.5);
   let shade = false;
-  let totOpen = 0, totPur = 0, totSold = 0, totClose = 0;
+  let totOpen = 0, totPur = 0, totSold = 0, totClose = 0, totValue = 0;
 
   rows.forEach((row, i) => {
     if (y > 540) { doc.addPage({ layout: 'landscape' }); y = 40; shade = false; }
@@ -120,21 +121,23 @@ function generateInventoryReportPDF(res, { title, rows }) {
     doc.text(String(i + 1),                     cols.no,    y, { width: 22 });
     doc.text(row.code,                           cols.code,  y, { width: 52 });
     doc.text(row.name,                           cols.name,  y, { width: 195, ellipsis: true });
-    doc.text(Number(row.opening).toFixed(2),     cols.open,  y, { width: 85, align: 'right' });
-    doc.text(Number(row.purchased).toFixed(2),   cols.pur,   y, { width: 85, align: 'right' });
-    doc.text(Number(row.sold).toFixed(2),        cols.sold,  y, { width: 85, align: 'right' });
+    doc.text(Number(row.opening).toFixed(2),     cols.open,  y, { width: 75, align: 'right' });
+    doc.text(Number(row.purchased).toFixed(2),   cols.pur,   y, { width: 75, align: 'right' });
+    doc.text(Number(row.sold).toFixed(2),        cols.sold,  y, { width: 75, align: 'right' });
 
     // Colour closing stock
     const closingColor = closing < 0 ? '#b91c1c' : closing === 0 ? '#b91c1c' : '#15803d';
     doc.fillColor(closingColor);
-    doc.text(closing.toFixed(2),                 cols.close, y, { width: 85, align: 'right' });
+    doc.text(closing.toFixed(2),                 cols.close, y, { width: 75, align: 'right' });
     doc.fillColor('#000000');
+    doc.text(fmt(row.closing_value, currency),   cols.value, y, { width: 90, align: 'right' });
     doc.text(row.status,                         cols.status,y, { width: 70 });
 
     totOpen  += Number(row.opening);
     totPur   += Number(row.purchased);
     totSold  += Number(row.sold);
     totClose += closing;
+    totValue += Number(row.closing_value);
     y += rowH;
     shade = !shade;
   });
@@ -144,10 +147,11 @@ function generateInventoryReportPDF(res, { title, rows }) {
   y += 5;
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000');
   doc.text('TOTALS',                  cols.name,  y, { width: 195 });
-  doc.text(totOpen.toFixed(2),        cols.open,  y, { width: 85, align: 'right' });
-  doc.text(totPur.toFixed(2),         cols.pur,   y, { width: 85, align: 'right' });
-  doc.text(totSold.toFixed(2),        cols.sold,  y, { width: 85, align: 'right' });
-  doc.text(totClose.toFixed(2),       cols.close, y, { width: 85, align: 'right' });
+  doc.text(totOpen.toFixed(2),        cols.open,  y, { width: 75, align: 'right' });
+  doc.text(totPur.toFixed(2),         cols.pur,   y, { width: 75, align: 'right' });
+  doc.text(totSold.toFixed(2),        cols.sold,  y, { width: 75, align: 'right' });
+  doc.text(totClose.toFixed(2),       cols.close, y, { width: 75, align: 'right' });
+  doc.text(fmt(totValue, currency),   cols.value, y, { width: 90, align: 'right' });
 
   doc.end();
 }

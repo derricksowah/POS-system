@@ -38,15 +38,27 @@ const stockIn = Joi.object({
   note:       Joi.string().trim().max(500).allow('', null).optional(),
 });
 
+const stockInUpdate = Joi.object({
+  quantity:  Joi.number().positive().required(),
+  supplier:  Joi.string().trim().max(200).allow('', null).optional(),
+  reference: Joi.string().trim().max(100).allow('', null).optional(),
+  note:      Joi.string().trim().max(500).allow('', null).optional(),
+});
+
 const saleItem = Joi.object({
-  product_id: Joi.number().integer().positive().required(),
-  quantity:   Joi.number().positive().required(),
-  unit_price: Joi.number().min(0).optional(),
+  product_id:          Joi.number().integer().positive().required(),
+  quantity:            Joi.number().positive().required(),
+  unit_price:          Joi.number().min(0).optional(),
+  original_unit_price: Joi.number().min(0).optional(),
+  discount_amount:     Joi.number().min(0).optional(),
 });
 
 const createSale = Joi.object({
   items:           Joi.array().items(saleItem).min(1).required(),
   amount_tendered: Joi.number().min(0).optional().allow(null),
+  cash_amount:     Joi.number().min(0).optional().allow(null),
+  momo_amount:     Joi.number().min(0).optional().allow(null),
+  payment_method:  Joi.string().valid('cash', 'momo', 'split').default('cash'),
 });
 
 const editSale = Joi.object({
@@ -97,6 +109,7 @@ module.exports = {
   product,
   productUpdate,
   stockIn,
+  stockInUpdate,
   createSale,
   editSale,
   dateRange,

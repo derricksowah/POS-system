@@ -14,9 +14,9 @@ async function dashboard(req, res, next) {
 
 async function salesReport(req, res, next) {
   try {
-    const { from, to } = req.query;
+    const { from, to, search } = req.query;
     const { format } = req.params;
-    const data = await reportService.getSalesReport({ from, to });
+    const data = await reportService.getSalesReport({ from, to, search });
     const settings = await settingsService.getSettings();
     const currency = settings?.currency || 'GHS';
 

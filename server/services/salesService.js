@@ -6,8 +6,10 @@ const { SALE_STATUS } = require('../config/constants');
  * Create a new sale. All stock deductions happen inside one transaction
  * with row-level locking to prevent overselling.
  */
-async function createSale({ cashierId, items, amount_tendered, payment_method = 'cash' }) {
+async function createSale({ cashierId, items, amount_tendered, cash_amount, momo_amount, payment_method = 'cash' }) {
   return withTransaction(async (client) => {
+    const normalizedItems = [];
+
     // 1. Validate and lock stock for each product
     for (const item of items) {
       const stockRes = await client.query(
@@ -26,20 +28,71 @@ async function createSale({ cashierId, items, amount_tendered, payment_method = 
           { status: 400 }
         );
       }
+
+      const productPrice = Number(stock.price);
+      const originalUnitPrice = item.original_unit_price != null
+        ? Number(item.original_unit_price)
+        : productPrice;
+      const requestedUnitPrice = item.unit_price != null
+        ? Number(item.unit_price)
+        : originalUnitPrice;
+      const discountAmount = item.discount_amount != null
+        ? Number(item.discount_amount)
+        : Math.max(0, originalUnitPrice - requestedUnitPrice);
+
+      if (requestedUnitPrice < 0 || originalUnitPrice < 0 || discountAmount < 0) {
+        throw Object.assign(new Error('Sale item prices cannot be negative.'), { status: 400, expose: true });
+      }
+
+      normalizedItems.push({
+        product_id: item.product_id,
+        quantity: Number(item.quantity),
+        unit_price: requestedUnitPrice,
+        original_unit_price: originalUnitPrice,
+        discount_amount: discountAmount,
+      });
+    }
+
+    const grandTotal = normalizedItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    let cashAmount = cash_amount != null
+      ? Number(cash_amount)
+      : (amount_tendered != null && Number(amount_tendered) > 0 ? Number(amount_tendered) : 0);
+    let momoAmount = momo_amount != null ? Number(momo_amount) : 0;
+
+    if (payment_method === 'cash') momoAmount = 0;
+    if (payment_method === 'momo') cashAmount = 0;
+
+    const totalPaid = cashAmount + momoAmount;
+
+    if (payment_method === 'cash' && cashAmount <= 0) {
+      throw Object.assign(new Error('Please enter the cash amount tendered.'), { status: 400, expose: true });
+    }
+    if (payment_method === 'momo' && momoAmount <= 0) {
+      throw Object.assign(new Error('Please enter the MoMo amount.'), { status: 400, expose: true });
+    }
+    if (payment_method === 'split' && (cashAmount <= 0 || momoAmount <= 0)) {
+      throw Object.assign(new Error('Please enter both cash and MoMo amounts.'), { status: 400, expose: true });
+    }
+    if (totalPaid + 0.001 < grandTotal) {
+      throw Object.assign(new Error('Payment amount is less than the sale total.'), { status: 400, expose: true });
     }
 
     // 2. Insert sale record — retry up to 5 times if receipt number collides
-    const tendered = (amount_tendered != null && Number(amount_tendered) > 0) ? Number(amount_tendered) : null;
+    const tendered = cashAmount > 0 ? cashAmount : null;
+    const changeDue = Math.max(0, totalPaid - grandTotal);
     let sale;
     for (let attempt = 0; attempt < 5; attempt++) {
       const receiptNumber = await generateReceiptNumber(client);
       try {
         await client.query('SAVEPOINT receipt_insert');
         const saleRes = await client.query(`
-          INSERT INTO sales (receipt_number, cashier_id, status, amount_tendered, payment_method)
-          VALUES ($1, $2, 'completed', $3, $4)
+          INSERT INTO sales (
+            receipt_number, cashier_id, status,
+            amount_tendered, payment_method, cash_amount, momo_amount, change_due
+          )
+          VALUES ($1, $2, 'completed', $3, $4, $5, $6, $7)
           RETURNING id, receipt_number, created_at
-        `, [receiptNumber, cashierId, tendered, payment_method]);
+        `, [receiptNumber, cashierId, tendered, payment_method, cashAmount, momoAmount, changeDue]);
         sale = saleRes.rows[0];
         await client.query('RELEASE SAVEPOINT receipt_insert');
         break;
@@ -57,18 +110,13 @@ async function createSale({ cashierId, items, amount_tendered, payment_method = 
 
     // 4. Insert sale items + deduct stock
     const saleItems = [];
-    for (const item of items) {
-      // Get current price from product
-      const priceRes = await client.query(
-        `SELECT price FROM products WHERE id = $1`,
-        [item.product_id]
-      );
-      const unitPrice = item.unit_price ?? priceRes.rows[0].price;
-
+    for (const item of normalizedItems) {
       const itemRes = await client.query(`
-        INSERT INTO sale_items (sale_id, product_id, quantity, unit_price)
-        VALUES ($1, $2, $3, $4) RETURNING *
-      `, [sale.id, item.product_id, item.quantity, unitPrice]);
+        INSERT INTO sale_items (
+          sale_id, product_id, quantity, unit_price, original_unit_price, discount_amount
+        )
+        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+      `, [sale.id, item.product_id, item.quantity, item.unit_price, item.original_unit_price, item.discount_amount]);
       saleItems.push(itemRes.rows[0]);
 
       // Deduct stock
@@ -87,17 +135,6 @@ async function createSale({ cashierId, items, amount_tendered, payment_method = 
     // 5. Return full receipt data
     const fullSale = await getSaleById(sale.id, client);
 
-    // 6. Now that we know grand_total, compute and store change_due
-    if (tendered != null) {
-      const changeDue = Math.max(0, tendered - Number(fullSale.grand_total));
-      await client.query(
-        `UPDATE sales SET change_due = $1 WHERE id = $2`,
-        [changeDue, sale.id]
-      );
-      fullSale.change_due = changeDue;
-      fullSale.amount_tendered = tendered;
-    }
-
     return fullSale;
   });
 }
@@ -111,6 +148,7 @@ async function getSaleById(id, client) {
   const saleRes = await db.query(`
     SELECT s.id, s.receipt_number, s.status, s.notes, s.created_at, s.updated_at,
            s.cashier_id, s.amount_tendered, s.change_due, s.payment_method,
+           s.cash_amount, s.momo_amount,
            u.username AS cashier_name,
            ue.username AS edited_by
     FROM sales s
@@ -122,7 +160,8 @@ async function getSaleById(id, client) {
   if (!sale) return null;
 
   const itemsRes = await db.query(`
-    SELECT si.id, si.product_id, si.quantity, si.unit_price, si.subtotal,
+    SELECT si.id, si.product_id, si.quantity, si.unit_price,
+           si.original_unit_price, si.discount_amount, si.subtotal,
            p.code AS product_code, p.name AS product_name, p.unit
     FROM sale_items si
     JOIN products p ON p.id = si.product_id
@@ -138,7 +177,7 @@ async function getSaleById(id, client) {
  */
 const ISO_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
-async function getSales({ from, to, cashierId, status, page = 1, limit = 50, excludeVoided = false } = {}) {
+async function getSales({ from, to, cashierId, status, search = '', page = 1, limit = 50, excludeVoided = false } = {}) {
   const { PAGINATION, SALE_STATUS: SS } = require('../config/constants');
   limit = Math.min(Math.max(parseInt(limit) || 50, 1), PAGINATION.MAX_LIMIT);
   page  = Math.max(parseInt(page) || 1, 1);
@@ -159,6 +198,20 @@ async function getSales({ from, to, cashierId, status, page = 1, limit = 50, exc
   if (cashierId) { params.push(cashierId); conditions.push(`s.cashier_id = $${params.length}`); }
   if (status)    { params.push(status); conditions.push(`s.status = $${params.length}`); }
   if (excludeVoided) { params.push('voided'); conditions.push(`s.status != $${params.length}`); }
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(
+      s.receipt_number ILIKE $${params.length}
+      OR u.username ILIKE $${params.length}
+      OR EXISTS (
+        SELECT 1
+        FROM sale_items si_search
+        JOIN products p_search ON p_search.id = si_search.product_id
+        WHERE si_search.sale_id = s.id
+          AND (p_search.name ILIKE $${params.length} OR p_search.code ILIKE $${params.length})
+      )
+    )`);
+  }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   params.push(limit, offset);
@@ -166,6 +219,7 @@ async function getSales({ from, to, cashierId, status, page = 1, limit = 50, exc
   const res = await query(`
     SELECT s.id, s.receipt_number, s.status, s.created_at, s.updated_at,
            u.username AS cashier_name,
+           s.payment_method, s.cash_amount, s.momo_amount,
            SUM(si.subtotal) AS grand_total,
            COUNT(si.id) AS item_count
     FROM sales s
@@ -179,7 +233,10 @@ async function getSales({ from, to, cashierId, status, page = 1, limit = 50, exc
 
   const countParams = params.slice(0, params.length - 2);
   const countRes = await query(
-    `SELECT COUNT(*) AS total FROM sales s ${where}`,
+    `SELECT COUNT(*) AS total
+     FROM sales s
+     JOIN users u ON u.id = s.cashier_id
+     ${where}`,
     countParams
   );
 
@@ -240,9 +297,18 @@ async function editSale(id, { items, notes }, editorId) {
 
     for (const item of items) {
       await client.query(`
-        INSERT INTO sale_items (sale_id, product_id, quantity, unit_price)
-        VALUES ($1, $2, $3, $4)
-      `, [id, item.product_id, item.quantity, item.unit_price]);
+        INSERT INTO sale_items (
+          sale_id, product_id, quantity, unit_price, original_unit_price, discount_amount
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [
+        id,
+        item.product_id,
+        item.quantity,
+        item.unit_price,
+        item.original_unit_price ?? item.unit_price,
+        item.discount_amount ?? 0,
+      ]);
 
       await client.query(
         `UPDATE stock SET quantity = quantity - $1, updated_at = NOW() WHERE product_id = $2`,

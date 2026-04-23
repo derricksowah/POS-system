@@ -33,6 +33,28 @@ async function getStockIns(req, res, next) {
   }
 }
 
+async function updateStockIn(req, res, next) {
+  try {
+    const { quantity, supplier, reference, note } = req.body;
+    const record = await stockService.updateStockIn(parseInt(req.params.id), {
+      quantity,
+      supplier,
+      reference,
+      note,
+      userId: req.user.id,
+    });
+    await logActivity({
+      userId: req.user.id, action: 'UPDATE_STOCK_IN',
+      entity: 'stock_ins', entityId: record.id,
+      details: { quantity: record.quantity },
+      ipAddress: req.ip,
+    });
+    res.json(record);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function currentStock(req, res, next) {
   try {
     const data = await stockService.getCurrentStock();
@@ -42,4 +64,4 @@ async function currentStock(req, res, next) {
   }
 }
 
-module.exports = { stockIn, getStockIns, currentStock };
+module.exports = { stockIn, getStockIns, updateStockIn, currentStock };

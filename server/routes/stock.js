@@ -10,5 +10,6 @@ router.use(authenticate);
 router.get('/current', ctrl.currentStock);
 router.get('/in',      authorize('admin'), ctrl.getStockIns);
 router.post('/in',     authorize('admin'), validate(schemas.stockIn), ctrl.stockIn);
+router.put('/in/:id',  authorize('admin'), validate(schemas.stockInUpdate), ctrl.updateStockIn);
 
 module.exports = router;

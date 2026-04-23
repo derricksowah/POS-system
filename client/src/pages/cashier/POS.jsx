@@ -20,13 +20,53 @@ export default function POS() {
   const [lastSale, setLastSale] = useState(null);
   const [alertOpen, setAlertOpen] = useState(true);
   const searchRef = useRef(null);
-  const [amountTendered, setAmountTendered] = useState('');
+  const cartRestored = useRef(false);
+  const cartStorageKey = useMemo(() => `pos-cart-${user?.id || user?.username || 'guest'}`, [user]);
+  const [cashAmount, setCashAmount] = useState('');
+  const [momoAmount, setMomoAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
 
   useEffect(() => {
     getProducts({ limit: 500 }).then(({ products: p }) => setProducts(p));
     searchRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(cartStorageKey);
+      setCart(saved ? JSON.parse(saved) : []);
+    } catch {
+      setCart([]);
+    } finally {
+      cartRestored.current = true;
+    }
+  }, [cartStorageKey]);
+
+  useEffect(() => {
+    if (!cartRestored.current) return;
+    localStorage.setItem(cartStorageKey, JSON.stringify(cart));
+  }, [cart, cartStorageKey]);
+
+  useEffect(() => {
+    if (!products.length || !cart.length) return;
+    setCart((prev) => prev
+      .map((item) => {
+        const product = products.find((p) => p.id === item.product_id);
+        if (!product) return null;
+        const original = Number(item.original_unit_price ?? product.price);
+        return {
+          ...item,
+          product_name: product.name,
+          product_code: product.code,
+          unit: product.unit,
+          current_stock: Number(product.current_stock),
+          original_unit_price: original,
+          unit_price: Number(item.unit_price ?? product.price),
+          discount_amount: Number(item.discount_amount || 0),
+        };
+      })
+      .filter(Boolean));
+  }, [products]);
 
   // Low stock alerts
   const lowStockItems = useMemo(() =>
@@ -57,7 +97,9 @@ export default function POS() {
         product_name: product.name,
         product_code: product.code,
         unit: product.unit,
+        original_unit_price: Number(product.price),
         unit_price: Number(product.price),
+        discount_amount: 0,
         quantity: 0.5,
         current_stock: Number(product.current_stock),
       }];
@@ -81,10 +123,53 @@ export default function POS() {
     }
   };
 
-  const removeItem = (productId) => setCart((prev) => prev.filter((i) => i.product_id !== productId));
-  const clearCart = () => { setCart([]); setSearch(''); setAmountTendered(''); setPaymentMethod('cash'); searchRef.current?.focus(); };
+  const updateItemPrice = (productId, price) => {
+    const nextPrice = Math.max(0, Number(price) || 0);
+    setCart((prev) => prev.map((i) => {
+      if (i.product_id !== productId) return i;
+      const original = Number(i.original_unit_price ?? i.unit_price);
+      return {
+        ...i,
+        original_unit_price: original,
+        unit_price: nextPrice,
+        discount_amount: Math.max(0, original - nextPrice),
+      };
+    }));
+  };
 
-  const grandTotal = cart.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
+  const updateItemDiscount = (productId, discount) => {
+    const nextDiscount = Math.max(0, Number(discount) || 0);
+    setCart((prev) => prev.map((i) => {
+      if (i.product_id !== productId) return i;
+      const original = Number(i.original_unit_price ?? i.unit_price);
+      const cappedDiscount = Math.min(nextDiscount, original);
+      return {
+        ...i,
+        original_unit_price: original,
+        discount_amount: cappedDiscount,
+        unit_price: Math.max(0, original - cappedDiscount),
+      };
+    }));
+  };
+
+  const removeItem = (productId) => setCart((prev) => prev.filter((i) => i.product_id !== productId));
+  const selectPaymentMethod = (method) => {
+    setPaymentMethod(method);
+    if (method === 'cash') setMomoAmount('');
+    if (method === 'momo') setCashAmount('');
+  };
+  const clearCart = () => {
+    setCart([]);
+    setSearch('');
+    setCashAmount('');
+    setMomoAmount('');
+    setPaymentMethod('cash');
+    searchRef.current?.focus();
+  };
+
+  const grandTotal = cart.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unit_price), 0);
+  const totalPaid = (Number(cashAmount) || 0) + (Number(momoAmount) || 0);
+  const changeDue = Math.max(0, totalPaid - grandTotal);
 
   // Validate stock before confirming
   const validate = () => {
@@ -100,23 +185,39 @@ export default function POS() {
   const confirmSale = async () => {
     if (cart.length === 0) { toast.error('Cart is empty.'); return; }
     if (!validate()) return;
-    if (paymentMethod === 'cash' && (amountTendered === '' || Number(amountTendered) <= 0)) {
+    if (paymentMethod === 'cash' && (cashAmount === '' || Number(cashAmount) <= 0)) {
       toast.error('Please enter the cash amount tendered.'); return;
     }
-    if (paymentMethod === 'cash' && Number(amountTendered) < grandTotal) {
+    if (paymentMethod === 'momo' && (momoAmount === '' || Number(momoAmount) <= 0)) {
+      toast.error('Please enter the MoMo amount.'); return;
+    }
+    if (paymentMethod === 'split' && (Number(cashAmount) <= 0 || Number(momoAmount) <= 0)) {
+      toast.error('Please enter both cash and MoMo amounts.'); return;
+    }
+    if (totalPaid < grandTotal) {
+      toast.error('Payment amount is less than the total amount.'); return;
+    }
+    if (paymentMethod === 'cash' && Number(cashAmount) < grandTotal) {
       toast.error('Cash tendered is less than the total amount.'); return;
     }
 
     setConfirming(true);
     const soldItems = [...cart];
     try {
-      const tendered = paymentMethod === 'cash' ? Number(amountTendered) : null;
       const [sale, freshSettings] = await Promise.all([
-        createSale(
-          soldItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price })),
-          tendered,
-          paymentMethod
-        ),
+        createSale({
+          items: soldItems.map((i) => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+            unit_price: Number(i.unit_price),
+            original_unit_price: Number(i.original_unit_price ?? i.unit_price),
+            discount_amount: Number(i.discount_amount || 0),
+          })),
+          payment_method: paymentMethod,
+          amount_tendered: Number(cashAmount) || null,
+          cash_amount: Number(cashAmount) || 0,
+          momo_amount: Number(momoAmount) || 0,
+        }),
         getSettings(),
       ]);
       sale.cashier_name = user.username;
@@ -299,6 +400,11 @@ export default function POS() {
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       {formatCurrency(item.unit_price, currency)} / {item.unit}
+                      {Number(item.discount_amount || 0) > 0 && (
+                        <span style={{ color: 'var(--success)', fontWeight: 700 }}>
+                          {' '}discount {formatCurrency(item.discount_amount, currency)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button onClick={() => removeItem(item.product_id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1rem', padding: '0 4px', lineHeight: 1, flexShrink: 0 }}>✕</button>
@@ -328,6 +434,32 @@ export default function POS() {
                   </span>
                 </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', marginTop: '0.45rem' }}>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                    Price
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.unit_price}
+                      onChange={(e) => updateItemPrice(item.product_id, e.target.value)}
+                      style={{ width: '100%', marginTop: 2, border: '1px solid var(--border)', borderRadius: 4, padding: '3px 5px', fontSize: '0.82rem' }}
+                    />
+                  </label>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                    Discount
+                    <input
+                      type="number"
+                      min="0"
+                      max={Number(item.original_unit_price ?? item.unit_price)}
+                      step="0.01"
+                      value={item.discount_amount || ''}
+                      onChange={(e) => updateItemDiscount(item.product_id, e.target.value)}
+                      style={{ width: '100%', marginTop: 2, border: '1px solid var(--border)', borderRadius: 4, padding: '3px 5px', fontSize: '0.82rem' }}
+                    />
+                  </label>
+                </div>
+
                 {/* Stock warning */}
                 {item.quantity > item.current_stock && (
                   <div style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: 3 }}>
@@ -348,15 +480,15 @@ export default function POS() {
             </span>
           </div>
 
-          {/* Payment method + cash tendered */}
+          {/* Payment method + amounts */}
           {cart.length > 0 && (
             <div style={{ marginBottom: '0.75rem' }}>
               {/* Payment toggle */}
               <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem' }}>
-                {['cash', 'momo'].map((method) => (
+                {['cash', 'momo', 'split'].map((method) => (
                   <button
                     key={method}
-                    onClick={() => setPaymentMethod(method)}
+                    onClick={() => selectPaymentMethod(method)}
                     style={{
                       flex: 1, padding: '0.45rem', fontWeight: 700, fontSize: '0.85rem',
                       border: `2px solid ${paymentMethod === method ? (method === 'momo' ? '#f59e0b' : 'var(--primary)') : 'var(--border)'}`,
@@ -365,33 +497,52 @@ export default function POS() {
                       color: paymentMethod === method ? (method === 'momo' ? '#92400e' : 'var(--primary)') : 'var(--text-muted)',
                     }}
                   >
-                    {method === 'cash' ? '💵 Cash' : '📱 MoMo'}
+                    {method === 'cash' ? 'Cash' : method === 'momo' ? 'MoMo' : 'Both'}
                   </button>
                 ))}
               </div>
 
-              {/* Cash tendered — greyed out for MoMo */}
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: paymentMethod === 'momo' ? 'var(--text-muted)' : 'var(--text)', display: 'block', marginBottom: '0.3rem' }}>
-                Cash Tendered ({currency})
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={paymentMethod === 'momo' ? '' : amountTendered}
-                onChange={(e) => setAmountTendered(e.target.value)}
-                disabled={paymentMethod === 'momo'}
-                style={{
-                  width: '100%', padding: '0.5rem 0.6rem', fontSize: '1rem',
-                  border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
-                  textAlign: 'right', fontWeight: 600,
-                  background: paymentMethod === 'momo' ? 'var(--bg)' : '#fff',
-                  color: paymentMethod === 'momo' ? 'var(--text-muted)' : 'var(--text)',
-                  cursor: paymentMethod === 'momo' ? 'not-allowed' : 'text',
-                }}
-              />
-              {paymentMethod === 'cash' && amountTendered !== '' && Number(amountTendered) >= grandTotal && (
+              <div style={{ display: paymentMethod === 'split' ? 'grid' : 'block', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                {(paymentMethod === 'cash' || paymentMethod === 'split') && (
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: '0.3rem' }}>
+                    Cash ({currency})
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={cashAmount}
+                      onChange={(e) => setCashAmount(e.target.value)}
+                      style={{
+                        width: '100%', marginTop: 4, padding: '0.5rem 0.6rem', fontSize: '1rem',
+                        border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
+                        textAlign: 'right', fontWeight: 600,
+                      }}
+                    />
+                  </label>
+                )}
+
+                {(paymentMethod === 'momo' || paymentMethod === 'split') && (
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: '0.3rem' }}>
+                    MoMo ({currency})
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={momoAmount}
+                      onChange={(e) => setMomoAmount(e.target.value)}
+                      style={{
+                        width: '100%', marginTop: 4, padding: '0.5rem 0.6rem', fontSize: '1rem',
+                        border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
+                        textAlign: 'right', fontWeight: 600,
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
+              {totalPaid >= grandTotal && totalPaid > 0 && (
                 <div style={{
                   marginTop: '0.4rem', padding: '0.4rem 0.6rem',
                   background: '#f0fdf4', border: '1px solid #bbf7d0',
@@ -400,11 +551,11 @@ export default function POS() {
                 }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#166534' }}>Change</span>
                   <span style={{ fontSize: '1rem', fontWeight: 800, color: '#166534' }}>
-                    {formatCurrency(Number(amountTendered) - grandTotal, currency)}
+                    {formatCurrency(changeDue, currency)}
                   </span>
                 </div>
               )}
-              {paymentMethod === 'cash' && amountTendered !== '' && Number(amountTendered) > 0 && Number(amountTendered) < grandTotal && (
+              {totalPaid > 0 && totalPaid < grandTotal && (
                 <div style={{
                   marginTop: '0.4rem', padding: '0.4rem 0.6rem',
                   background: '#fff7ed', border: '1px solid #fed7aa',
@@ -413,17 +564,8 @@ export default function POS() {
                 }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#9a3412' }}>Short by</span>
                   <span style={{ fontSize: '1rem', fontWeight: 800, color: '#9a3412' }}>
-                    {formatCurrency(grandTotal - Number(amountTendered), currency)}
+                    {formatCurrency(grandTotal - totalPaid, currency)}
                   </span>
-                </div>
-              )}
-              {paymentMethod === 'momo' && (
-                <div style={{
-                  marginTop: '0.4rem', padding: '0.4rem 0.6rem',
-                  background: '#fef3c7', border: '1px solid #fcd34d',
-                  borderRadius: 'var(--radius)', fontSize: '0.82rem', fontWeight: 600, color: '#92400e',
-                }}>
-                  📱 MoMo payment — no change required
                 </div>
               )}
             </div>
