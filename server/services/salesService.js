@@ -60,15 +60,15 @@ async function createSale({ cashierId, items, amount_tendered, cash_amount, momo
     let momoAmount = momo_amount != null ? Number(momo_amount) : 0;
 
     if (payment_method === 'cash') momoAmount = 0;
-    if (payment_method === 'momo') cashAmount = 0;
+    if (payment_method === 'momo') {
+      cashAmount = 0;
+      momoAmount = grandTotal;
+    }
 
     const totalPaid = cashAmount + momoAmount;
 
     if (payment_method === 'cash' && cashAmount <= 0) {
       throw Object.assign(new Error('Please enter the cash amount tendered.'), { status: 400, expose: true });
-    }
-    if (payment_method === 'momo' && momoAmount <= 0) {
-      throw Object.assign(new Error('Please enter the MoMo amount.'), { status: 400, expose: true });
     }
     if (payment_method === 'split' && (cashAmount <= 0 || momoAmount <= 0)) {
       throw Object.assign(new Error('Please enter both cash and MoMo amounts.'), { status: 400, expose: true });
