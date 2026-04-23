@@ -3,6 +3,8 @@ import { getInventoryReport, downloadInventoryReportPDF, downloadInventoryReport
 import PageHeader from '../../components/PageHeader.jsx';
 import Spinner    from '../../components/Spinner.jsx';
 import toast      from 'react-hot-toast';
+import { formatCurrency } from '../../utils/formatters.js';
+import { useSettings } from '../../context/SettingsContext.jsx';
 
 const STATUS_CLASS = {
   'OK':            'badge-success',
@@ -13,6 +15,8 @@ const STATUS_CLASS = {
 };
 
 export default function InventoryReport() {
+  const { settings } = useSettings();
+  const currency = settings.currency || 'GHS';
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
@@ -39,7 +43,8 @@ export default function InventoryReport() {
     purchased: acc.purchased + Number(r.purchased),
     sold:      acc.sold      + Number(r.sold),
     closing:   acc.closing   + Number(r.closing),
-  }), { opening: 0, purchased: 0, sold: 0, closing: 0 });
+    value:     acc.value     + Number(r.closing_value),
+  }), { opening: 0, purchased: 0, sold: 0, closing: 0, value: 0 });
 
   return (
     <div>
@@ -121,6 +126,7 @@ export default function InventoryReport() {
                   <th style={{ textAlign: 'right' }}>Purchases / In</th>
                   <th style={{ textAlign: 'right' }}>Sales / Out</th>
                   <th style={{ textAlign: 'right' }}>Closing Stock</th>
+                  <th style={{ textAlign: 'right' }}>Stock Value</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -158,6 +164,9 @@ export default function InventoryReport() {
                           {Number(r.closing).toFixed(2)}
                         </strong>
                       </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <strong>{formatCurrency(r.closing_value, currency)}</strong>
+                      </td>
                       <td>
                         <span className={`badge ${STATUS_CLASS[r.status] || 'badge-gray'}`}>
                           {r.status}
@@ -168,7 +177,7 @@ export default function InventoryReport() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center text-muted" style={{ padding: '2rem' }}>
+                    <td colSpan={9} className="text-center text-muted" style={{ padding: '2rem' }}>
                       No products match your filter.
                     </td>
                   </tr>
@@ -184,6 +193,7 @@ export default function InventoryReport() {
                     <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>+{totals.purchased.toFixed(2)}</td>
                     <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>−{totals.sold.toFixed(2)}</td>
                     <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{totals.closing.toFixed(2)}</td>
+                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{formatCurrency(totals.value, currency)}</td>
                     <td></td>
                   </tr>
                 </tfoot>

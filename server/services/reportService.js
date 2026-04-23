@@ -4,16 +4,15 @@ const { query } = require('../config/database');
  * Admin dashboard summary.
  */
 async function getDashboard() {
-  const today = new Date().toISOString().slice(0, 10);
-
   const [productsRes, todaySalesRes, lowStockRes, totalValueRes] = await Promise.all([
     query(`SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE`),
     query(`
       SELECT COUNT(DISTINCT s.id) AS count, COALESCE(SUM(si.subtotal), 0) AS value
       FROM sales s
       LEFT JOIN sale_items si ON si.sale_id = s.id
-      WHERE s.created_at::date = $1 AND s.status != 'voided'
-    `, [today]),
+      WHERE (s.created_at AT TIME ZONE 'Africa/Accra')::date = (NOW() AT TIME ZONE 'Africa/Accra')::date
+        AND s.status != 'voided'
+    `),
     query(`
       SELECT COUNT(*) AS count
       FROM products p
@@ -41,9 +40,25 @@ async function getDashboard() {
  * Sales report — individual line items sorted by date.
  * Each row: receipt #, date, product code, product name, qty, unit price, amount.
  */
-async function getSalesReport({ from, to } = {}) {
+async function getSalesReport({ from, to, search = '' } = {}) {
   const fromDate = from || new Date(0).toISOString().slice(0, 10);
   const toDate   = (to || new Date().toISOString().slice(0, 10)) + ' 23:59:59';
+  const params = [fromDate, toDate];
+  const conditions = [
+    `s.created_at >= $1`,
+    `s.created_at <= $2`,
+    `s.status != 'voided'`,
+  ];
+
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(
+      s.receipt_number ILIKE $${params.length}
+      OR p.code ILIKE $${params.length}
+      OR p.name ILIKE $${params.length}
+      OR u.username ILIKE $${params.length}
+    )`);
+  }
 
   const res = await query(`
     SELECT
@@ -58,11 +73,10 @@ async function getSalesReport({ from, to } = {}) {
     FROM sale_items si
     JOIN products p ON p.id = si.product_id
     JOIN sales    s ON s.id = si.sale_id
-    WHERE s.created_at >= $1
-      AND s.created_at <= $2
-      AND s.status != 'voided'
+    JOIN users    u ON u.id = s.cashier_id
+    WHERE ${conditions.join(' AND ')}
     ORDER BY s.created_at ASC, s.id ASC, p.name ASC
-  `, [fromDate, toDate]);
+  `, params);
 
   const totalsRes = await query(`
     SELECT
@@ -71,9 +85,11 @@ async function getSalesReport({ from, to } = {}) {
       COUNT(DISTINCT s.id)           AS transaction_count,
       COUNT(si.id)                   AS line_count
     FROM sale_items si
+    JOIN products p ON p.id = si.product_id
     JOIN sales s ON s.id = si.sale_id
-    WHERE s.created_at >= $1 AND s.created_at <= $2 AND s.status != 'voided'
-  `, [fromDate, toDate]);
+    JOIN users u ON u.id = s.cashier_id
+    WHERE ${conditions.join(' AND ')}
+  `, params);
 
   return {
     rows:   res.rows,
@@ -92,16 +108,18 @@ async function getInventoryReport() {
       p.code,
       p.name,
       p.unit,
+      p.price,
       p.opening_stock  AS opening,
       p.low_stock_threshold AS threshold,
       p.is_active,
       COALESCE(SUM(CASE WHEN sm.type = 'purchase' THEN sm.quantity ELSE 0 END), 0) AS purchased,
       COALESCE(ABS(SUM(CASE WHEN sm.type IN ('sale', 'sale_edit') AND sm.quantity < 0 THEN sm.quantity ELSE 0 END)), 0) AS sold,
-      COALESCE(st.quantity, 0) AS closing
+      COALESCE(st.quantity, 0) AS closing,
+      COALESCE(st.quantity, 0) * p.price AS closing_value
     FROM products p
     LEFT JOIN stock_movements sm ON sm.product_id = p.id
     LEFT JOIN stock st ON st.product_id = p.id
-    GROUP BY p.id, p.code, p.name, p.unit, p.opening_stock, p.low_stock_threshold, p.is_active, st.quantity
+    GROUP BY p.id, p.code, p.name, p.unit, p.price, p.opening_stock, p.low_stock_threshold, p.is_active, st.quantity
     ORDER BY p.name
   `);
 
@@ -121,8 +139,6 @@ async function getInventoryReport() {
  * Cashier: today's grouped sales summary.
  */
 async function getTodaySalesSummary(cashierId) {
-  const today = new Date().toISOString().slice(0, 10);
-
   const res = await query(`
     SELECT
       p.code AS product_code,
@@ -134,12 +150,12 @@ async function getTodaySalesSummary(cashierId) {
     FROM sale_items si
     JOIN products p ON p.id = si.product_id
     JOIN sales s ON s.id = si.sale_id
-    WHERE s.created_at::date = $1
-      AND s.cashier_id = $2
+    WHERE (s.created_at AT TIME ZONE 'Africa/Accra')::date = (NOW() AT TIME ZONE 'Africa/Accra')::date
+      AND s.cashier_id = $1
       AND s.status != 'voided'
     GROUP BY p.code, p.name, p.unit
     ORDER BY total_amount DESC
-  `, [today, cashierId]);
+  `, [cashierId]);
 
   const summaryRes = await query(`
     SELECT
@@ -148,8 +164,10 @@ async function getTodaySalesSummary(cashierId) {
       COALESCE(SUM(si.quantity), 0) AS total_units
     FROM sales s
     LEFT JOIN sale_items si ON si.sale_id = s.id
-    WHERE s.created_at::date = $1 AND s.cashier_id = $2 AND s.status != 'voided'
-  `, [today, cashierId]);
+    WHERE (s.created_at AT TIME ZONE 'Africa/Accra')::date = (NOW() AT TIME ZONE 'Africa/Accra')::date
+      AND s.cashier_id = $1
+      AND s.status != 'voided'
+  `, [cashierId]);
 
   return { rows: res.rows, summary: summaryRes.rows[0] };
 }

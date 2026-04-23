@@ -8,6 +8,8 @@ async function createSale(req, res, next) {
       cashierId:       req.user.id,
       items:           req.body.items,
       amount_tendered: req.body.amount_tendered,
+      cash_amount:     req.body.cash_amount,
+      momo_amount:     req.body.momo_amount,
       payment_method:  req.body.payment_method || 'cash',
     });
     await logActivity({
@@ -24,7 +26,7 @@ async function createSale(req, res, next) {
 
 async function listSales(req, res, next) {
   try {
-    const { from, to, cashierId, status, page, limit } = req.query;
+    const { from, to, cashierId, status, search, page, limit } = req.query;
 
     // Cashiers can only see their own sales; admins can see all
     const filteredCashierId = req.user.role === 'cashier' ? req.user.id : (cashierId ? parseInt(cashierId) : undefined);
@@ -33,6 +35,7 @@ async function listSales(req, res, next) {
       from, to,
       cashierId: filteredCashierId,
       status,
+      search,
       page:  parseInt(page)  || 1,
       limit: parseInt(limit) || 50,
     });

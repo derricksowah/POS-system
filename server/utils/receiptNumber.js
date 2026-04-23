@@ -12,12 +12,14 @@ async function generateReceiptNumber(client) {
   const seqRes = await db.query("SELECT nextval('receipt_seq') AS seq");
   const seq = seqRes.rows[0].seq;
 
-  const now = new Date();
-  const dateStr = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('');
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Accra',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (type) => dateParts.find((p) => p.type === type)?.value;
+  const dateStr = `${part('year')}${part('month')}${part('day')}`;
 
   const seqStr = String(seq).padStart(4, '0');
   return `RCPT-${dateStr}-${seqStr}`;

@@ -1,7 +1,11 @@
 import api from './api';
 
-export const createSale = (items, amount_tendered, payment_method = 'cash') =>
-  api.post('/sales', { items, amount_tendered: amount_tendered ?? null, payment_method }).then((r) => r.data);
+export const createSale = (dataOrItems, amount_tendered, payment_method = 'cash') => {
+  const data = Array.isArray(dataOrItems)
+    ? { items: dataOrItems, amount_tendered: amount_tendered ?? null, payment_method }
+    : dataOrItems;
+  return api.post('/sales', data).then((r) => r.data);
+};
 
 export const getSales = (params = {}) =>
   api.get('/sales', { params }).then((r) => r.data);

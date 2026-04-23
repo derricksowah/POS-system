@@ -22,3 +22,6 @@ export const stockIn = (data) =>
 
 export const getStockIns = (params = {}) =>
   api.get('/stock/in', { params }).then((r) => r.data);
+
+export const updateStockIn = (id, data) =>
+  api.put(`/stock/in/${id}`, data).then((r) => r.data);

@@ -11,7 +11,7 @@ export default function SalesReport() {
   const currency          = settings.currency || 'GHS';
   const [data, setData]   = useState(null);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ from: todayISO(), to: todayISO() });
+  const [filters, setFilters] = useState({ from: todayISO(), to: todayISO(), search: '' });
   const [grouped, setGrouped] = useState(false);
 
   const load = () => {
@@ -78,6 +78,15 @@ export default function SalesReport() {
             <label className="form-label">To</label>
             <input type="date" className="form-input" value={filters.to}
               onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+          </div>
+          <div className="form-group" style={{ minWidth: 240 }}>
+            <label className="form-label">Search</label>
+            <input
+              className="form-input"
+              placeholder="Receipt, product, cashier..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            />
           </div>
           <button className="btn btn-primary" onClick={load}>Generate Report</button>
         </div>

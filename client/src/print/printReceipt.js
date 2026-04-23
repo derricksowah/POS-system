@@ -12,6 +12,11 @@ export function printReceipt(sale, settings = {}) {
   const totalQty = items.reduce((s, i) => s + Number(i.quantity), 0);
 
   const fmt = (n) => Number(n).toFixed(2);
+  const paymentLabel = sale.payment_method === 'split'
+    ? 'Cash + MoMo'
+    : sale.payment_method === 'momo'
+      ? 'Mobile Money (MoMo)'
+      : 'Cash';
 
   const itemRows = items.map((item) => `
     <tr>
@@ -22,6 +27,11 @@ export function printReceipt(sale, settings = {}) {
       <td class="item-detail">${fmt(item.quantity)} x ${fmt(item.unit_price)}</td>
       <td></td>
     </tr>
+    ${Number(item.discount_amount || 0) > 0 ? `
+    <tr class="item-detail-row">
+      <td class="item-detail">Discount: ${escHtml(currency)} ${fmt(item.discount_amount)} each</td>
+      <td></td>
+    </tr>` : ''}
   `).join('');
 
   const logoHtml = settings.logo_url
@@ -207,16 +217,22 @@ export function printReceipt(sale, settings = {}) {
   <table class="meta-table" style="margin-bottom:2mm;">
     <tr>
       <td class="label">Payment</td>
-      <td style="text-align:right">${sale.payment_method === 'momo' ? 'Mobile Money (MoMo)' : 'Cash'}</td>
+      <td style="text-align:right">${escHtml(paymentLabel)}</td>
     </tr>
-    ${sale.amount_tendered != null ? `
+    ${Number(sale.cash_amount || 0) > 0 ? `
     <tr>
-      <td class="label">Cash Tendered</td>
-      <td style="text-align:right">${escHtml(currency)} ${fmt(Number(sale.amount_tendered))}</td>
-    </tr>
+      <td class="label">Cash</td>
+      <td style="text-align:right">${escHtml(currency)} ${fmt(Number(sale.cash_amount))}</td>
+    </tr>` : ''}
+    ${Number(sale.momo_amount || 0) > 0 ? `
+    <tr>
+      <td class="label">MoMo</td>
+      <td style="text-align:right">${escHtml(currency)} ${fmt(Number(sale.momo_amount))}</td>
+    </tr>` : ''}
+    ${Number(sale.cash_amount || sale.amount_tendered || 0) > 0 ? `
     <tr>
       <td class="label">Change</td>
-      <td style="text-align:right">${escHtml(currency)} ${fmt(Number(sale.change_due ?? Math.max(0, Number(sale.amount_tendered) - total)))}</td>
+      <td style="text-align:right">${escHtml(currency)} ${fmt(Number(sale.change_due ?? Math.max(0, Number(sale.cash_amount || sale.amount_tendered) - total)))}</td>
     </tr>` : ''}
   </table>
 

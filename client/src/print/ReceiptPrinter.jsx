@@ -27,6 +27,11 @@ async function generateReceiptPDF(sale, settings) {
   const currency = settings?.currency || 'GHS';
   const items    = sale.items ?? [];
   const total    = Number(sale.grand_total || 0);
+  const paymentLabel = sale.payment_method === 'split'
+    ? 'Cash + MoMo'
+    : sale.payment_method === 'momo'
+      ? 'Mobile Money (MoMo)'
+      : 'Cash';
 
   // ── Page dimensions ───────────────────────────────────────────
   const W  = 80;   // mm — standard 80mm thermal width
@@ -210,6 +215,12 @@ async function generateReceiptPDF(sale, settings) {
     doc.text(amt,   C.amt,   y, { align: 'right' });
 
     y += Math.max(nameLines.length, 1) * LH.sm + 1.5;
+
+    if (Number(item.discount_amount || 0) > 0) {
+      setFont('normal', 6.8);
+      doc.text(`Discount: ${currency} ${Number(item.discount_amount).toFixed(2)} each`, C.item, y);
+      y += LH.xs;
+    }
   }
 
   y += 0.5;
@@ -230,6 +241,17 @@ async function generateReceiptPDF(sale, settings) {
   doc.text(`TOTAL`, ML + 2.5, y + 5.8);
   doc.text(`${currency} ${total.toFixed(2)}`, W - MR - 2.5, y + 5.8, { align: 'right' });
   y += 9 + 3;
+
+  y = twoCol('Payment', paymentLabel, y, 'bold', 'normal', 7.5);
+  if (Number(sale.cash_amount || 0) > 0) {
+    y = twoCol('Cash', `${currency} ${Number(sale.cash_amount).toFixed(2)}`, y, 'bold', 'normal', 7.5);
+  }
+  if (Number(sale.momo_amount || 0) > 0) {
+    y = twoCol('MoMo', `${currency} ${Number(sale.momo_amount).toFixed(2)}`, y, 'bold', 'normal', 7.5);
+  }
+  if (Number(sale.cash_amount || sale.amount_tendered || 0) > 0) {
+    y = twoCol('Change', `${currency} ${Number(sale.change_due || 0).toFixed(2)}`, y, 'bold', 'normal', 7.5);
+  }
 
   y = dashedLine(y);
   y += 1;

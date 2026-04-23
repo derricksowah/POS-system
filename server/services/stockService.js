@@ -86,6 +86,67 @@ async function getStockIns({ productId, from, to, page = 1, limit = 50 } = {}) {
 }
 
 /**
+ * Edit a stock-in record and apply the quantity difference to current stock.
+ */
+async function updateStockIn(id, { quantity, supplier, reference, note, userId }) {
+  return withTransaction(async (client) => {
+    const existingRes = await client.query(
+      `SELECT * FROM stock_ins WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    const existing = existingRes.rows[0];
+    if (!existing) {
+      throw Object.assign(new Error('Stock-in record not found.'), { status: 404, expose: true });
+    }
+
+    const stockRes = await client.query(
+      `SELECT quantity FROM stock WHERE product_id = $1 FOR UPDATE`,
+      [existing.product_id]
+    );
+    const stock = stockRes.rows[0];
+    if (!stock) {
+      throw Object.assign(new Error('Product stock record not found.'), { status: 404, expose: true });
+    }
+
+    const newQuantity = Number(quantity);
+    const oldQuantity = Number(existing.quantity);
+    const delta = newQuantity - oldQuantity;
+    const nextStock = Number(stock.quantity) + delta;
+
+    if (nextStock < 0) {
+      throw Object.assign(new Error('Cannot reduce this stock-in below stock already sold or adjusted.'), { status: 400, expose: true });
+    }
+
+    if (delta !== 0) {
+      await client.query(
+        `UPDATE stock SET quantity = quantity + $1, updated_at = NOW() WHERE product_id = $2`,
+        [delta, existing.product_id]
+      );
+
+      await client.query(`
+        INSERT INTO stock_movements (product_id, type, quantity, reference, note, created_by)
+        VALUES ($1, 'adjustment', $2, $3, $4, $5)
+      `, [
+        existing.product_id,
+        delta,
+        reference || existing.reference,
+        `Stock-in edit: ${oldQuantity} to ${newQuantity}${note ? ` - ${note}` : ''}`,
+        userId,
+      ]);
+    }
+
+    const res = await client.query(`
+      UPDATE stock_ins
+      SET quantity = $1, supplier = $2, reference = $3, note = $4, updated_by = $5, updated_at = NOW()
+      WHERE id = $6
+      RETURNING *
+    `, [newQuantity, supplier || null, reference || null, note || null, userId, id]);
+
+    return res.rows[0];
+  });
+}
+
+/**
  * Get current stock levels for all products.
  */
 async function getCurrentStock() {
@@ -100,4 +161,4 @@ async function getCurrentStock() {
   return res.rows;
 }
 
-module.exports = { stockIn, getStockIns, getCurrentStock };
+module.exports = { stockIn, getStockIns, updateStockIn, getCurrentStock };

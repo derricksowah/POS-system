@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getProducts }  from '../../services/productService.js';
-import { stockIn, getStockIns } from '../../services/settingsService.js';
+import { stockIn, getStockIns, updateStockIn } from '../../services/settingsService.js';
 import PageHeader   from '../../components/PageHeader.jsx';
 import Modal        from '../../components/Modal.jsx';
 import Spinner      from '../../components/Spinner.jsx';
@@ -16,6 +16,7 @@ export default function StockIn() {
   const [page, setPage]        = useState(1);
   const [loading, setLoading]  = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing]  = useState(null);
   const [form, setForm]        = useState(EMPTY);
   const [saving, setSaving]    = useState(false);
   const LIMIT = 50;
@@ -32,13 +33,42 @@ export default function StockIn() {
     getProducts({ limit: 500 }).then(({ products: p }) => setProducts(p));
   }, []);
 
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY);
+    setModalOpen(true);
+  };
+
+  const openEdit = (record) => {
+    setEditing(record);
+    setForm({
+      product_id: record.product_id,
+      quantity: record.quantity,
+      supplier: record.supplier || '',
+      reference: record.reference || '',
+      note: record.note || '',
+    });
+    setModalOpen(true);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await stockIn({ ...form, product_id: Number(form.product_id), quantity: Number(form.quantity) });
-      toast.success('Stock recorded successfully.');
+      if (editing) {
+        await updateStockIn(editing.id, {
+          quantity: Number(form.quantity),
+          supplier: form.supplier,
+          reference: form.reference,
+          note: form.note,
+        });
+        toast.success('Stock-in record updated.');
+      } else {
+        await stockIn({ ...form, product_id: Number(form.product_id), quantity: Number(form.quantity) });
+        toast.success('Stock recorded successfully.');
+      }
       setModalOpen(false);
+      setEditing(null);
       setForm(EMPTY);
       load();
     } catch (err) {
@@ -55,14 +85,14 @@ export default function StockIn() {
       <PageHeader
         title="Stock In (Purchases)"
         subtitle={`${total} records`}
-        actions={<button className="btn btn-primary" onClick={() => setModalOpen(true)}>+ Record Stock In</button>}
+        actions={<button className="btn btn-primary" onClick={openCreate}>+ Record Stock In</button>}
       />
       <div className="page">
         {loading ? <Spinner /> : (
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Date</th><th>Product</th><th>Qty</th><th>Supplier</th><th>Reference</th><th>Note</th><th>Recorded By</th></tr>
+                <tr><th>Date</th><th>Product</th><th>Qty</th><th>Supplier</th><th>Reference</th><th>Note</th><th>Recorded By</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {records.map((r) => (
@@ -74,10 +104,13 @@ export default function StockIn() {
                     <td>{r.reference || <span className="text-muted">—</span>}</td>
                     <td>{r.note || <span className="text-muted">—</span>}</td>
                     <td>{r.created_by_username || '—'}</td>
+                    <td>
+                      <button className="btn btn-outline btn-sm" onClick={() => openEdit(r)}>Edit</button>
+                    </td>
                   </tr>
                 ))}
                 {records.length === 0 && (
-                  <tr><td colSpan={7} className="text-center text-muted" style={{ padding: '2rem' }}>No stock-in records yet.</td></tr>
+                  <tr><td colSpan={8} className="text-center text-muted" style={{ padding: '2rem' }}>No stock-in records yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -94,10 +127,10 @@ export default function StockIn() {
       </div>
 
       <Modal
-        open={modalOpen} onClose={() => setModalOpen(false)} title="Record Stock In"
+        open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? 'Edit Stock In' : 'Record Stock In'}
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setModalOpen(false)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancel</button>
             <button className="btn btn-primary" form="stock-form" type="submit" disabled={saving}>
               {saving ? 'Saving...' : 'Save'}
             </button>
@@ -108,7 +141,7 @@ export default function StockIn() {
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label">Product *</label>
             <select className="form-select" value={form.product_id}
-              onChange={(e) => setForm({ ...form, product_id: e.target.value })} required>
+              onChange={(e) => setForm({ ...form, product_id: e.target.value })} required disabled={!!editing}>
               <option value="">— Select product —</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>{p.code} — {p.name} (Stock: {p.current_stock})</option>

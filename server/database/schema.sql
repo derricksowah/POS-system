@@ -120,7 +120,10 @@ CREATE TABLE IF NOT EXISTS sales (
     cashier_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     status          VARCHAR(20) NOT NULL DEFAULT 'completed' CHECK (status IN ('completed', 'edited', 'voided')),
     notes           TEXT,
+    payment_method  VARCHAR(20) NOT NULL DEFAULT 'cash',
     amount_tendered NUMERIC(12,2),
+    cash_amount     NUMERIC(12,2) NOT NULL DEFAULT 0,
+    momo_amount     NUMERIC(12,2) NOT NULL DEFAULT 0,
     change_due      NUMERIC(12,2),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -141,6 +144,8 @@ CREATE TABLE IF NOT EXISTS sale_items (
     product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     quantity    NUMERIC(12, 2) NOT NULL CHECK (quantity > 0),
     unit_price  NUMERIC(12, 2) NOT NULL CHECK (unit_price >= 0),
+    original_unit_price NUMERIC(12, 2) NOT NULL CHECK (original_unit_price >= 0),
+    discount_amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
     subtotal    NUMERIC(12, 2) GENERATED ALWAYS AS (quantity * unit_price) STORED
 );
 
@@ -195,7 +200,9 @@ CREATE TABLE IF NOT EXISTS stock_ins (
     reference   VARCHAR(100),
     note        TEXT,
     created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by  INTEGER REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_stock_ins_product_id ON stock_ins(product_id);
@@ -231,4 +238,8 @@ CREATE TRIGGER trg_stock_updated_at
 
 CREATE TRIGGER trg_settings_updated_at
     BEFORE UPDATE ON settings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER trg_stock_ins_updated_at
+    BEFORE UPDATE ON stock_ins
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();

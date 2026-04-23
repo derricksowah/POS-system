@@ -13,7 +13,7 @@ export default function CashierSalesLog() {
   const [sales, setSales]  = useState([]);
   const [total, setTotal]  = useState(0);
   const [page, setPage]    = useState(1);
-  const [filters, setFilters] = useState({ from: todayISO(), to: todayISO(), status: '' });
+  const [filters, setFilters] = useState({ from: todayISO(), to: todayISO(), status: '', search: '' });
   const [loading, setLoading]     = useState(true);
   const [detailSale, setDetailSale] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -67,6 +67,15 @@ export default function CashierSalesLog() {
               <option value="edited">Edited</option>
               <option value="voided">Voided</option>
             </select>
+          </div>
+          <div className="form-group" style={{ minWidth: 240 }}>
+            <label className="form-label">Search</label>
+            <input
+              className="form-input"
+              placeholder="Receipt or product..."
+              value={filters.search}
+              onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setPage(1); }}
+            />
           </div>
           <button className="btn btn-primary" onClick={() => { setPage(1); load(); }}>Filter</button>
         </div>
@@ -124,6 +133,9 @@ export default function CashierSalesLog() {
               <div><span className="text-muted">Cashier:</span> <strong>{detailSale.cashier_name}</strong></div>
               <div><span className="text-muted">Date:</span> <strong>{formatDateTime(detailSale.created_at)}</strong></div>
               <div><span className="text-muted">Status:</span> <span className={`badge ${detailSale.status === 'completed' ? 'badge-success' : detailSale.status === 'edited' ? 'badge-warning' : 'badge-danger'}`}>{detailSale.status}</span></div>
+              <div><span className="text-muted">Payment:</span> <strong>{detailSale.payment_method === 'split' ? 'Cash + MoMo' : detailSale.payment_method === 'momo' ? 'MoMo' : 'Cash'}</strong></div>
+              {Number(detailSale.cash_amount || 0) > 0 && <div><span className="text-muted">Cash:</span> <strong>{formatCurrency(detailSale.cash_amount, currency)}</strong></div>}
+              {Number(detailSale.momo_amount || 0) > 0 && <div><span className="text-muted">MoMo:</span> <strong>{formatCurrency(detailSale.momo_amount, currency)}</strong></div>}
               {detailSale.edited_by && <div><span className="text-muted">Edited by:</span> <strong>{detailSale.edited_by}</strong></div>}
             </div>
             <table style={{ width: '100%', fontSize: '0.88rem', borderCollapse: 'collapse' }}>
@@ -135,7 +147,14 @@ export default function CashierSalesLog() {
                   <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '0.5rem' }}>{item.product_name}</td>
                     <td>{item.quantity} {item.unit}</td>
-                    <td>{formatCurrency(item.unit_price, currency)}</td>
+                    <td>
+                      {formatCurrency(item.unit_price, currency)}
+                      {Number(item.discount_amount || 0) > 0 && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--success)', fontWeight: 700 }}>
+                          Discount {formatCurrency(item.discount_amount, currency)}
+                        </div>
+                      )}
+                    </td>
                     <td><strong>{formatCurrency(item.subtotal, currency)}</strong></td>
                   </tr>
                 ))}
