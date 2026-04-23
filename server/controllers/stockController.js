@@ -20,10 +20,11 @@ async function stockIn(req, res, next) {
 
 async function getStockIns(req, res, next) {
   try {
-    const { productId, from, to, page, limit } = req.query;
+    const { productId, from, to, search, page, limit } = req.query;
     const result = await stockService.getStockIns({
       productId: productId ? parseInt(productId) : undefined,
       from, to,
+      search,
       page:  parseInt(page)  || 1,
       limit: parseInt(limit) || 50,
     });
@@ -55,6 +56,21 @@ async function updateStockIn(req, res, next) {
   }
 }
 
+async function deleteStockIn(req, res, next) {
+  try {
+    const record = await stockService.deleteStockIn(parseInt(req.params.id), req.user.id);
+    await logActivity({
+      userId: req.user.id, action: 'DELETE_STOCK_IN',
+      entity: 'stock_ins', entityId: record.id,
+      details: { product_id: record.product_id, quantity: record.quantity },
+      ipAddress: req.ip,
+    });
+    res.json({ message: `Stock-in for "${record.product_name}" deleted and stock reversed.` });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function currentStock(req, res, next) {
   try {
     const data = await stockService.getCurrentStock();
@@ -64,4 +80,4 @@ async function currentStock(req, res, next) {
   }
 }
 
-module.exports = { stockIn, getStockIns, updateStockIn, currentStock };
+module.exports = { stockIn, getStockIns, updateStockIn, deleteStockIn, currentStock };

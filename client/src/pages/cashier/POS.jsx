@@ -503,20 +503,24 @@ export default function POS() {
               </div>
 
               <div style={{ display: paymentMethod === 'split' ? 'grid' : 'block', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                {(paymentMethod === 'cash' || paymentMethod === 'split') && (
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: '0.3rem' }}>
+                {(paymentMethod === 'cash' || paymentMethod === 'split' || paymentMethod === 'momo') && (
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: paymentMethod === 'momo' ? 'var(--text-muted)' : 'var(--text)', display: 'block', marginBottom: '0.3rem' }}>
                     Cash ({currency})
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       placeholder="0.00"
-                      value={cashAmount}
+                      value={paymentMethod === 'momo' ? '' : cashAmount}
                       onChange={(e) => setCashAmount(e.target.value)}
+                      disabled={paymentMethod === 'momo'}
                       style={{
                         width: '100%', marginTop: 4, padding: '0.5rem 0.6rem', fontSize: '1rem',
                         border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
                         textAlign: 'right', fontWeight: 600,
+                        background: paymentMethod === 'momo' ? 'var(--bg)' : '#fff',
+                        color: paymentMethod === 'momo' ? 'var(--text-muted)' : 'var(--text)',
+                        cursor: paymentMethod === 'momo' ? 'not-allowed' : 'text',
                       }}
                     />
                   </label>

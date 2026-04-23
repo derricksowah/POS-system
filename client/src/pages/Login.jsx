@@ -25,7 +25,7 @@ export default function Login() {
     }
   };
 
-  const shopName = 'Retail Shop';
+  const shopName = 'DDC Enterprise';
 
   return (
     <div style={{

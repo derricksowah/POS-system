@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getProducts }  from '../../services/productService.js';
-import { stockIn, getStockIns, updateStockIn } from '../../services/settingsService.js';
+import { stockIn, getStockIns, updateStockIn, deleteStockIn } from '../../services/settingsService.js';
 import PageHeader   from '../../components/PageHeader.jsx';
 import Modal        from '../../components/Modal.jsx';
+import ConfirmDialog from '../../components/ConfirmDialog.jsx';
 import Spinner      from '../../components/Spinner.jsx';
 import { formatDateTime, getErrorMessage } from '../../utils/formatters.js';
 import toast from 'react-hot-toast';
@@ -14,19 +15,21 @@ export default function StockIn() {
   const [total, setTotal]      = useState(0);
   const [products, setProducts] = useState([]);
   const [page, setPage]        = useState(1);
+  const [search, setSearch]    = useState('');
   const [loading, setLoading]  = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing]  = useState(null);
   const [form, setForm]        = useState(EMPTY);
   const [saving, setSaving]    = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, record: null });
   const LIMIT = 50;
 
   const load = useCallback(() => {
     setLoading(true);
-    getStockIns({ page, limit: LIMIT })
+    getStockIns({ search, page, limit: LIMIT })
       .then(({ stockIns, total: t }) => { setRecords(stockIns); setTotal(t); })
       .finally(() => setLoading(false));
-  }, [page]);
+  }, [search, page]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -37,6 +40,18 @@ export default function StockIn() {
     setEditing(null);
     setForm(EMPTY);
     setModalOpen(true);
+  };
+
+  const handleDelete = async () => {
+    const record = deleteConfirm.record;
+    setDeleteConfirm({ open: false, record: null });
+    try {
+      await deleteStockIn(record.id);
+      toast.success('Stock-in deleted and stock reversed.');
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
   };
 
   const openEdit = (record) => {
@@ -88,6 +103,24 @@ export default function StockIn() {
         actions={<button className="btn btn-primary" onClick={openCreate}>+ Record Stock In</button>}
       />
       <div className="page">
+        <div className="card mb-2" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            className="form-input"
+            placeholder="Search product, supplier, reference, note..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            style={{ maxWidth: 360 }}
+          />
+          {search && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setPage(1); }}>
+              Clear
+            </button>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            {total} record{total !== 1 ? 's' : ''}
+          </span>
+        </div>
+
         {loading ? <Spinner /> : (
           <div className="table-wrap">
             <table>
@@ -105,7 +138,10 @@ export default function StockIn() {
                     <td>{r.note || <span className="text-muted">—</span>}</td>
                     <td>{r.created_by_username || '—'}</td>
                     <td>
-                      <button className="btn btn-outline btn-sm" onClick={() => openEdit(r)}>Edit</button>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button className="btn btn-outline btn-sm" onClick={() => openEdit(r)}>Edit</button>
+                        <button className="btn btn-outline-danger btn-sm" onClick={() => setDeleteConfirm({ open: true, record: r })}>Delete</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -169,6 +205,16 @@ export default function StockIn() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onClose={() => setDeleteConfirm({ open: false, record: null })}
+        onConfirm={handleDelete}
+        title="Delete Stock In"
+        message={`Delete this stock-in for "${deleteConfirm.record?.product_name}"? This will reduce current stock and purchases/in by ${deleteConfirm.record?.quantity || 0}.`}
+        danger
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

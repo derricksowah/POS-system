@@ -25,3 +25,6 @@ export const getStockIns = (params = {}) =>
 
 export const updateStockIn = (id, data) =>
   api.put(`/stock/in/${id}`, data).then((r) => r.data);
+
+export const deleteStockIn = (id) =>
+  api.delete(`/stock/in/${id}`).then((r) => r.data);
