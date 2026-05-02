@@ -75,7 +75,7 @@ function generateSalesReportPDF(res, { title, dateRange, rows, totals, currency 
 /**
  * Generate an Inventory Report PDF.
  */
-function generateInventoryReportPDF(res, { title, rows, currency = 'GHS' }) {
+function generateInventoryReportPDF(res, { title, dateRange, rows, currency = 'GHS' }) {
   const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -84,7 +84,10 @@ function generateInventoryReportPDF(res, { title, rows, currency = 'GHS' }) {
 
   // Header
   doc.fontSize(16).font('Helvetica-Bold').text(title, { align: 'center' });
-  doc.fontSize(9).font('Helvetica').text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+  doc.fontSize(9).font('Helvetica').text(
+    `Period: ${dateRange?.from || 'today'} to ${dateRange?.to || dateRange?.from || 'today'} | Generated: ${new Date().toLocaleString()}`,
+    { align: 'center' }
+  );
   doc.moveDown(1);
 
   // Column positions (landscape A4 = 841 wide)

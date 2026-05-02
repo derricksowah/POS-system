@@ -1,5 +1,8 @@
 const { query, withTransaction } = require('../config/database');
 
+const APP_TIME_ZONE = 'Africa/Accra';
+const ISO_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
 /**
  * Record a stock-in (purchase).
  */
@@ -48,13 +51,13 @@ async function getStockIns({ productId, from, to, search = '', page = 1, limit =
     params.push(productId);
     conditions.push(`si.product_id = $${params.length}`);
   }
-  if (from) {
+  if (from && ISO_DATE_RE.test(from)) {
     params.push(from);
-    conditions.push(`si.created_at >= $${params.length}`);
+    conditions.push(`(si.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date >= $${params.length}::date`);
   }
-  if (to) {
-    params.push(to + ' 23:59:59');
-    conditions.push(`si.created_at <= $${params.length}`);
+  if (to && ISO_DATE_RE.test(to)) {
+    params.push(to);
+    conditions.push(`(si.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date <= $${params.length}::date`);
   }
   if (search) {
     params.push(`%${search}%`);

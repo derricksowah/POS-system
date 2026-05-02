@@ -101,7 +101,7 @@ async function generateSalesReportExcel(res, { title, dateRange, rows, totals, c
 /**
  * Generate an Inventory Report Excel file.
  */
-async function generateInventoryReportExcel(res, { rows, currency = 'GHS' }) {
+async function generateInventoryReportExcel(res, { dateRange, rows, currency = 'GHS' }) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'POS System';
   wb.created = new Date();
@@ -115,7 +115,7 @@ async function generateInventoryReportExcel(res, { rows, currency = 'GHS' }) {
   ws.getCell('A1').alignment = { horizontal: 'center' };
 
   ws.mergeCells('A2:J2');
-  ws.getCell('A2').value = `Generated: ${new Date().toLocaleString()}`;
+  ws.getCell('A2').value = `Period: ${dateRange?.from || 'today'} to ${dateRange?.to || dateRange?.from || 'today'} | Generated: ${new Date().toLocaleString()}`;
   ws.getCell('A2').alignment = { horizontal: 'center' };
   ws.getCell('A2').font = { size: 9, color: { argb: 'FF64748B' } };
 

@@ -16,6 +16,7 @@ export default function StockIn() {
   const [products, setProducts] = useState([]);
   const [page, setPage]        = useState(1);
   const [search, setSearch]    = useState('');
+  const [dateFilters, setDateFilters] = useState({ from: '', to: '' });
   const [loading, setLoading]  = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing]  = useState(null);
@@ -26,10 +27,10 @@ export default function StockIn() {
 
   const load = useCallback(() => {
     setLoading(true);
-    getStockIns({ search, page, limit: LIMIT })
+    getStockIns({ search, from: dateFilters.from, to: dateFilters.to, page, limit: LIMIT })
       .then(({ stockIns, total: t }) => { setRecords(stockIns); setTotal(t); })
       .finally(() => setLoading(false));
-  }, [search, page]);
+  }, [search, dateFilters.from, dateFilters.to, page]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -103,7 +104,31 @@ export default function StockIn() {
         actions={<button className="btn btn-primary" onClick={openCreate}>+ Record Stock In</button>}
       />
       <div className="page">
-        <div className="card mb-2" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="card mb-2" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="form-group">
+            <label className="form-label">From</label>
+            <input
+              type="date"
+              className="form-input"
+              value={dateFilters.from}
+              onChange={(e) => {
+                setDateFilters({ ...dateFilters, from: e.target.value });
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">To</label>
+            <input
+              type="date"
+              className="form-input"
+              value={dateFilters.to}
+              onChange={(e) => {
+                setDateFilters({ ...dateFilters, to: e.target.value });
+                setPage(1);
+              }}
+            />
+          </div>
           <input
             className="form-input"
             placeholder="Search product, supplier, reference, note..."
@@ -111,8 +136,15 @@ export default function StockIn() {
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             style={{ maxWidth: 360 }}
           />
-          {search && (
-            <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setPage(1); }}>
+          {(search || dateFilters.from || dateFilters.to) && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setSearch('');
+                setDateFilters({ from: '', to: '' });
+                setPage(1);
+              }}
+            >
               Clear
             </button>
           )}

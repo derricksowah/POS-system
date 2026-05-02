@@ -48,24 +48,26 @@ async function salesReport(req, res, next) {
 
 async function inventoryReport(req, res, next) {
   try {
+    const { from, to } = req.query;
     const { format } = req.params;
-    const rows = await reportService.getInventoryReport();
+    const data = await reportService.getInventoryReport({ from, to });
     const settings = await settingsService.getSettings();
     const currency = settings?.currency || 'GHS';
 
     if (format === 'pdf') {
       return generateInventoryReportPDF(res, {
         title: `${settings?.shop_name || 'POS'} — Inventory Report`,
-        rows,
+        dateRange: data.period,
+        rows: data.rows,
         currency,
       });
     }
 
     if (format === 'excel') {
-      return generateInventoryReportExcel(res, { rows, currency });
+      return generateInventoryReportExcel(res, { dateRange: data.period, rows: data.rows, currency });
     }
 
-    res.json(rows);
+    res.json(data);
   } catch (err) {
     next(err);
   }

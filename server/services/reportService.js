@@ -1,5 +1,28 @@
 const { query } = require('../config/database');
 
+const APP_TIME_ZONE = 'Africa/Accra';
+const ISO_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+function todayISO() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (type) => parts.find((p) => p.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function normalizeInventoryPeriod({ from, to } = {}) {
+  const today = todayISO();
+  const start = ISO_DATE_RE.test(from || '') ? from : today;
+  const endCandidate = ISO_DATE_RE.test(to || '') ? to : start;
+  const end = endCandidate < start ? start : endCandidate;
+
+  return { from: start, to: end };
+}
+
 /**
  * Admin dashboard summary.
  */
@@ -101,29 +124,52 @@ async function getSalesReport({ from, to, search = '' } = {}) {
 /**
  * Inventory report: Opening + Purchases - Sales = Closing.
  */
-async function getInventoryReport() {
+async function getInventoryReport({ from, to } = {}) {
+  const period = normalizeInventoryPeriod({ from, to });
   const res = await query(`
+    WITH movement_totals AS (
+      SELECT
+        sm.product_id,
+        COALESCE(SUM(CASE
+          WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date < $1::date
+          THEN sm.quantity ELSE 0
+        END), 0) AS opening,
+        COALESCE(SUM(CASE
+          WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date BETWEEN $1::date AND $2::date
+           AND sm.quantity > 0
+          THEN sm.quantity ELSE 0
+        END), 0) AS purchased,
+        COALESCE(SUM(CASE
+          WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date BETWEEN $1::date AND $2::date
+           AND sm.quantity < 0
+          THEN ABS(sm.quantity) ELSE 0
+        END), 0) AS sold,
+        COALESCE(SUM(CASE
+          WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date <= $2::date
+          THEN sm.quantity ELSE 0
+        END), 0) AS closing
+      FROM stock_movements sm
+      GROUP BY sm.product_id
+    )
     SELECT
       p.id,
       p.code,
       p.name,
       p.unit,
       p.price,
-      p.opening_stock  AS opening,
+      COALESCE(mt.opening, 0) AS opening,
       p.low_stock_threshold AS threshold,
       p.is_active,
-      COALESCE(SUM(CASE WHEN sm.type = 'purchase' THEN sm.quantity ELSE 0 END), 0) AS purchased,
-      COALESCE(ABS(SUM(CASE WHEN sm.type IN ('sale', 'sale_edit') AND sm.quantity < 0 THEN sm.quantity ELSE 0 END)), 0) AS sold,
-      COALESCE(st.quantity, 0) AS closing,
-      COALESCE(st.quantity, 0) * p.price AS closing_value
+      COALESCE(mt.purchased, 0) AS purchased,
+      COALESCE(mt.sold, 0) AS sold,
+      COALESCE(mt.closing, 0) AS closing,
+      COALESCE(mt.closing, 0) * p.price AS closing_value
     FROM products p
-    LEFT JOIN stock_movements sm ON sm.product_id = p.id
-    LEFT JOIN stock st ON st.product_id = p.id
-    GROUP BY p.id, p.code, p.name, p.unit, p.price, p.opening_stock, p.low_stock_threshold, p.is_active, st.quantity
+    LEFT JOIN movement_totals mt ON mt.product_id = p.id
     ORDER BY p.name
-  `);
+  `, [period.from, period.to]);
 
-  return res.rows.map((row) => {
+  const rows = res.rows.map((row) => {
     let status = 'OK';
     const closing = Number(row.closing);
     const sold    = Number(row.sold);
@@ -133,6 +179,8 @@ async function getInventoryReport() {
     else if (sold === 0)                           status = 'Zero Movement';
     return { ...row, status };
   });
+
+  return { rows, period };
 }
 
 /**

@@ -6,8 +6,8 @@ export const getDashboard = () =>
 export const getSalesReport = (params = {}) =>
   api.get('/reports/sales/json', { params }).then((r) => r.data);
 
-export const getInventoryReport = () =>
-  api.get('/reports/inventory/json').then((r) => r.data);
+export const getInventoryReport = (params = {}) =>
+  api.get('/reports/inventory/json', { params }).then((r) => r.data);
 
 export const getTodaySummary = () =>
   api.get('/reports/today').then((r) => r.data);
@@ -36,8 +36,8 @@ export const downloadSalesReportPDF = (params = {}) =>
 export const downloadSalesReportExcel = (params = {}) =>
   downloadBlob('/reports/sales/excel', params, `sales-report-${params.from ?? 'all'}.xlsx`);
 
-export const downloadInventoryReportPDF = () =>
-  downloadBlob('/reports/inventory/pdf', {}, 'inventory-report.pdf');
+export const downloadInventoryReportPDF = (params = {}) =>
+  downloadBlob('/reports/inventory/pdf', params, `inventory-report-${params.from ?? 'today'}.pdf`);
 
-export const downloadInventoryReportExcel = () =>
-  downloadBlob('/reports/inventory/excel', {}, 'inventory-report.xlsx');
+export const downloadInventoryReportExcel = (params = {}) =>
+  downloadBlob('/reports/inventory/excel', params, `inventory-report-${params.from ?? 'today'}.xlsx`);
