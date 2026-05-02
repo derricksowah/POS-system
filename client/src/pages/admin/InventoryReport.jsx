@@ -3,7 +3,7 @@ import { getInventoryReport, downloadInventoryReportPDF, downloadInventoryReport
 import PageHeader from '../../components/PageHeader.jsx';
 import Spinner    from '../../components/Spinner.jsx';
 import toast      from 'react-hot-toast';
-import { formatCurrency } from '../../utils/formatters.js';
+import { formatCurrency, todayISO } from '../../utils/formatters.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
 
 const STATUS_CLASS = {
@@ -18,13 +18,25 @@ export default function InventoryReport() {
   const { settings } = useSettings();
   const currency = settings.currency || 'GHS';
   const [rows, setRows]       = useState([]);
+  const [period, setPeriod]   = useState({ from: todayISO(), to: todayISO() });
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({ from: todayISO(), to: todayISO() });
   const [search, setSearch]   = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   const load = () => {
     setLoading(true);
-    getInventoryReport().then(setRows).finally(() => setLoading(false));
+    getInventoryReport(filters)
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setRows(data);
+          setPeriod(filters);
+        } else {
+          setRows(data.rows || []);
+          setPeriod(data.period || filters);
+        }
+      })
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
@@ -50,11 +62,11 @@ export default function InventoryReport() {
     <div>
       <PageHeader
         title="Inventory Report"
-        subtitle="Opening Balance + Purchases − Sales = Closing Stock"
+        subtitle={`Opening + Purchases/In - Sales/Out = Closing (${period.from} to ${period.to})`}
         actions={
           <>
-            <button className="btn btn-outline btn-sm" onClick={() => downloadInventoryReportPDF().catch(() => toast.error('Failed to download PDF.'))}>⬇ PDF</button>
-            <button className="btn btn-success btn-sm" onClick={() => downloadInventoryReportExcel().catch(() => toast.error('Failed to download Excel.'))}>⬇ Excel</button>
+            <button className="btn btn-outline btn-sm" onClick={() => downloadInventoryReportPDF(filters).catch(() => toast.error('Failed to download PDF.'))}>⬇ PDF</button>
+            <button className="btn btn-success btn-sm" onClick={() => downloadInventoryReportExcel(filters).catch(() => toast.error('Failed to download Excel.'))}>⬇ Excel</button>
           </>
         }
       />
@@ -83,7 +95,25 @@ export default function InventoryReport() {
         </div>
 
         {/* Search & filter bar */}
-        <div className="card mb-2" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="card mb-2" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="form-group">
+            <label className="form-label">From</label>
+            <input
+              type="date"
+              className="form-input"
+              value={filters.from}
+              onChange={(e) => setFilters({ ...filters, from: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">To</label>
+            <input
+              type="date"
+              className="form-input"
+              value={filters.to}
+              onChange={(e) => setFilters({ ...filters, to: e.target.value })}
+            />
+          </div>
           <input
             className="form-input"
             placeholder="Search by code or name…"
@@ -102,6 +132,7 @@ export default function InventoryReport() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          <button className="btn btn-primary btn-sm" onClick={load}>Generate</button>
           {(search || statusFilter) && (
             <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setStatusFilter(''); }}>
               ✕ Clear
