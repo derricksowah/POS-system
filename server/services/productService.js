@@ -21,7 +21,7 @@ async function getAll({ search = '', includeInactive = false, page = 1, limit = 
 
   params.push(limit, offset);
   const dataRes = await query(`
-    SELECT p.id, p.code, p.name, p.price, p.unit,
+    SELECT p.id, p.code, p.name, p.price, p.cost_price, p.unit,
            p.opening_stock, p.low_stock_threshold, p.is_active,
            p.created_at, p.updated_at,
            COALESCE(s.quantity, 0) AS current_stock
@@ -44,6 +44,24 @@ async function getAll({ search = '', includeInactive = false, page = 1, limit = 
     page,
     limit,
   };
+}
+
+async function getAllExport({ includeInactive = false } = {}) {
+  const conditions = ['p.deleted_at IS NULL'];
+  if (!includeInactive) {
+    conditions.push('p.is_active = TRUE');
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const res = await query(`
+    SELECT p.id, p.code, p.name, p.price, p.cost_price, p.unit,
+           p.opening_stock, p.low_stock_threshold, p.is_active,
+           COALESCE(s.quantity, 0) AS current_stock
+    FROM products p
+    LEFT JOIN stock s ON s.product_id = p.id
+    ${where}
+    ORDER BY p.name ASC
+  `);
+  return res.rows;
 }
 
 async function getById(id) {
@@ -91,14 +109,14 @@ async function generateProductCode(client) {
   return `P${String(nextNumber).padStart(4, '0')}`;
 }
 
-async function create({ name, price, unit, opening_stock, low_stock_threshold }) {
+async function create({ name, price, cost_price, unit, opening_stock, low_stock_threshold }) {
   return withTransaction(async (client) => {
     const autoCode = await generateProductCode(client);
 
     const res = await client.query(`
-      INSERT INTO products (code, name, price, unit, opening_stock, low_stock_threshold)
-      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
-    `, [autoCode, name, price, unit, opening_stock, low_stock_threshold]);
+      INSERT INTO products (code, name, price, cost_price, unit, opening_stock, low_stock_threshold)
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+    `, [autoCode, name, price, cost_price ?? null, unit, opening_stock, low_stock_threshold]);
     const product = res.rows[0];
 
     // Initialize stock
@@ -117,12 +135,12 @@ async function create({ name, price, unit, opening_stock, low_stock_threshold })
   });
 }
 
-async function update(id, { name, price, unit, low_stock_threshold }) {
+async function update(id, { name, price, cost_price, unit, low_stock_threshold }) {
   const res = await query(`
     UPDATE products
-    SET name = $1, price = $2, unit = $3, low_stock_threshold = $4, updated_at = NOW()
-    WHERE id = $5 RETURNING *
-  `, [name, price, unit, low_stock_threshold, id]);
+    SET name = $1, price = $2, cost_price = $3, unit = $4, low_stock_threshold = $5, updated_at = NOW()
+    WHERE id = $6 RETURNING *
+  `, [name, price, cost_price ?? null, unit, low_stock_threshold, id]);
   return res.rows[0] || null;
 }
 
@@ -157,7 +175,7 @@ async function deleteProduct(id) {
 // Get all soft-deleted products for the recycle bin
 async function getDeleted() {
   const res = await query(`
-    SELECT p.id, p.code, p.name, p.price, p.unit,
+    SELECT p.id, p.code, p.name, p.price, p.cost_price, p.unit,
            p.opening_stock, p.low_stock_threshold, p.is_active,
            p.created_at, p.deleted_at,
            COALESCE(s.quantity, 0) AS current_stock
@@ -228,4 +246,4 @@ async function getLowStock() {
   return res.rows;
 }
 
-module.exports = { getAll, getById, create, update, deactivate, activate, deleteProduct, getDeleted, restoreProduct, permanentDelete, getLowStock };
+module.exports = { getAll, getAllExport, getById, create, update, deactivate, activate, deleteProduct, getDeleted, restoreProduct, permanentDelete, getLowStock };

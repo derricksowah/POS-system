@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import {
   getUsers, createUser, changeUsername,
@@ -374,3 +375,4 @@ function UserTable({ users, me, onUsername, onPassword, onToggle }) {
     </div>
   );
 }
+

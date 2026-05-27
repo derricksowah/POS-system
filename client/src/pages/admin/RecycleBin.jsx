@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { getDeletedProducts, restoreProduct, permanentDeleteProduct } from '../../services/productService.js';
 import PageHeader    from '../../components/PageHeader.jsx';
@@ -166,3 +167,4 @@ export default function RecycleBin() {
     </div>
   );
 }
+

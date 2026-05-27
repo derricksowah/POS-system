@@ -101,7 +101,7 @@ async function generateSalesReportExcel(res, { title, dateRange, rows, totals, c
 /**
  * Generate an Inventory Report Excel file.
  */
-async function generateInventoryReportExcel(res, { dateRange, rows, currency = 'GHS' }) {
+async function generateInventoryReportExcel(res, { dateRange, rows, currency = 'GHS', visibleColumns } = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'POS System';
   wb.created = new Date();
@@ -121,22 +121,28 @@ async function generateInventoryReportExcel(res, { dateRange, rows, currency = '
 
   ws.addRow([]);
 
-  // Column definitions
-  ws.columns = [
-    { key: 'no',        width: 6  },
-    { key: 'code',      width: 14 },
-    { key: 'name',      width: 32 },
-    { key: 'unit',      width: 10 },
-    { key: 'opening',   width: 18 },
-    { key: 'purchased', width: 16 },
-    { key: 'sold',      width: 14 },
-    { key: 'closing',   width: 16 },
-    { key: 'value',     width: 18 },
-    { key: 'status',    width: 16 },
+  // Default: show all columns if not specified
+  const showCol = (key) => !visibleColumns || visibleColumns.includes(key);
+
+  // Dynamic column definitions based on visibility
+  const allCols = [
+    { key: 'no',        label: '#',                          width: 6  },
+    { key: 'code',      label: 'Product Code',               width: 14 },
+    { key: 'name',      label: 'Product Name',               width: 32 },
+    { key: 'unit',      label: 'Unit',                       width: 10 },
+    { key: 'opening',   label: 'Opening Balance',            width: 18 },
+    { key: 'purchased', label: 'Purchases / In',             width: 16 },
+    { key: 'sold',      label: 'Sales / Out',                width: 14 },
+    { key: 'closing',   label: 'Closing Stock',              width: 16 },
+    { key: 'value',     label: `Closing Value (${currency})`, width: 18 },
+    { key: 'status',    label: 'Status',                     width: 16 },
   ];
 
+  const visibleCols = allCols.filter((col) => showCol(col.key));
+  ws.columns = visibleCols;
+
   // Header row
-  const headerRow = ws.addRow(['#', 'Product Code', 'Product Name', 'Unit', 'Opening Balance', 'Purchases / In', 'Sales / Out', 'Closing Stock', `Closing Value (${currency})`, 'Status']);
+  const headerRow = ws.addRow(visibleCols.map((col) => col.label));
   headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   headerRow.alignment = { horizontal: 'center' };
@@ -154,64 +160,89 @@ async function generateInventoryReportExcel(res, { dateRange, rows, currency = '
 
   rows.forEach((row, i) => {
     const closing = Number(row.closing);
-    const r = ws.addRow({
-      no:        i + 1,
-      code:      row.code,
-      name:      row.name,
-      unit:      row.unit,
-      opening:   Number(row.opening),
-      purchased: Number(row.purchased),
-      sold:      Number(row.sold),
-      closing,
-      value:     Number(row.closing_value),
-      status:    row.status,
-    });
+    const rowData = {};
+    if (showCol('no')) rowData.no = i + 1;
+    if (showCol('code')) rowData.code = row.code;
+    if (showCol('name')) rowData.name = row.name;
+    if (showCol('unit')) rowData.unit = row.unit;
+    if (showCol('opening')) rowData.opening = Number(row.opening);
+    if (showCol('purchased')) rowData.purchased = Number(row.purchased);
+    if (showCol('sold')) rowData.sold = Number(row.sold);
+    if (showCol('closing')) rowData.closing = closing;
+    if (showCol('value')) rowData.value = Number(row.closing_value);
+    if (showCol('status')) rowData.status = row.status;
+
+    const r = ws.addRow(rowData);
 
     // Alternate row shading
     if (i % 2 === 1) {
-      ['no','code','name','unit','opening','purchased','sold','closing','value'].forEach((k) => {
-        r.getCell(k).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      visibleCols.forEach((col) => {
+        r.getCell(col.key).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
       });
     }
 
     // Closing stock colour
-    const closingCell = r.getCell('closing');
-    closingCell.font = {
-      bold: true,
-      color: { argb: closing < 0 ? 'FFB91C1C' : closing === 0 ? 'FFB91C1C' : closing <= Number(row.threshold) ? 'FFD97706' : 'FF15803D' },
-    };
+    if (showCol('closing')) {
+      const closingCell = r.getCell('closing');
+      closingCell.font = {
+        bold: true,
+        color: { argb: closing < 0 ? 'FFB91C1C' : closing === 0 ? 'FFB91C1C' : closing <= Number(row.threshold) ? 'FFD97706' : 'FF15803D' },
+      };
+    }
 
     // Status badge colour
-    const fill = statusFill[row.status];
-    if (fill) r.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: fill };
-    r.getCell('status').font = { bold: true };
+    if (showCol('status')) {
+      const fill = statusFill[row.status];
+      if (fill) r.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: fill };
+      r.getCell('status').font = { bold: true };
+    }
 
-    // Number alignment
+    // Number alignment and formatting
     ['opening','purchased','sold','closing'].forEach((k) => {
-      r.getCell(k).alignment = { horizontal: 'right' };
-      r.getCell(k).numFmt = '#,##0.00';
+      if (showCol(k)) {
+        r.getCell(k).alignment = { horizontal: 'right' };
+        r.getCell(k).numFmt = '#,##0.00';
+      }
     });
-    r.getCell('value').alignment = { horizontal: 'right' };
-    r.getCell('value').numFmt = moneyFmt;
+    if (showCol('value')) {
+      r.getCell('value').alignment = { horizontal: 'right' };
+      r.getCell('value').numFmt = moneyFmt;
+    }
 
-    totOpen  += Number(row.opening);
-    totPur   += Number(row.purchased);
-    totSold  += Number(row.sold);
-    totClose += closing;
-    totValue += Number(row.closing_value);
+    if (showCol('opening')) totOpen += Number(row.opening);
+    if (showCol('purchased')) totPur += Number(row.purchased);
+    if (showCol('sold')) totSold += Number(row.sold);
+    if (showCol('closing')) totClose += closing;
+    if (showCol('value')) totValue += Number(row.closing_value);
   });
 
   // Totals row
   ws.addRow([]);
-  const totalRow = ws.addRow(['', '', 'TOTALS', '', totOpen, totPur, totSold, totClose, totValue, '']);
+  const totalData = {};
+  if (showCol('no')) totalData.no = '';
+  if (showCol('code')) totalData.code = '';
+  if (showCol('name')) totalData.name = 'TOTALS';
+  if (showCol('unit')) totalData.unit = '';
+  if (showCol('opening')) totalData.opening = totOpen;
+  if (showCol('purchased')) totalData.purchased = totPur;
+  if (showCol('sold')) totalData.sold = totSold;
+  if (showCol('closing')) totalData.closing = totClose;
+  if (showCol('value')) totalData.value = totValue;
+  if (showCol('status')) totalData.status = '';
+
+  const totalRow = ws.addRow(totalData);
   totalRow.font = { bold: true };
   totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
   ['opening','purchased','sold','closing'].forEach((k) => {
-    totalRow.getCell(k).numFmt = '#,##0.00';
-    totalRow.getCell(k).alignment = { horizontal: 'right' };
+    if (showCol(k)) {
+      totalRow.getCell(k).numFmt = '#,##0.00';
+      totalRow.getCell(k).alignment = { horizontal: 'right' };
+    }
   });
-  totalRow.getCell('value').numFmt = moneyFmt;
-  totalRow.getCell('value').alignment = { horizontal: 'right' };
+  if (showCol('value')) {
+    totalRow.getCell('value').numFmt = moneyFmt;
+    totalRow.getCell('value').alignment = { horizontal: 'right' };
+  }
 
   // Borders from header row down
   ws.eachRow((row, rowNumber) => {
@@ -231,4 +262,85 @@ async function generateInventoryReportExcel(res, { dateRange, rows, currency = '
   res.end();
 }
 
-module.exports = { generateSalesReportExcel, generateInventoryReportExcel };
+async function generateProductCatalogExcel(res, { title, rows, currency = 'GHS' }) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'POS System';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('Product Catalog');
+  ws.mergeCells('A1:F1');
+  ws.getCell('A1').value = title;
+  ws.getCell('A1').font = { size: 14, bold: true };
+  ws.getCell('A1').alignment = { horizontal: 'center' };
+
+  ws.addRow([]);
+  ws.columns = [
+    { key: 'code', width: 14 },
+    { key: 'name', width: 40 },
+    { key: 'unit', width: 14 },
+    { key: 'price', width: 14 },
+    { key: 'stock', width: 12 },
+    { key: 'status', width: 14 },
+  ];
+
+  const header = ws.addRow(['Code', 'Name', 'Unit', `Price (${currency})`, 'Stock', 'Status']);
+  header.font = { bold: true };
+  header.alignment = { horizontal: 'center' };
+
+  rows.forEach((r, i) => {
+    const row = ws.addRow({ code: r.code, name: r.name, unit: r.unit, price: Number(r.price), stock: Number(r.current_stock), status: r.is_active ? 'Active' : 'Inactive' });
+    if (i % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+    row.getCell('price').numFmt = `"${currency}" #,##0.00`;
+    row.getCell('stock').numFmt = '#,##0.00';
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="product-catalog.xlsx"');
+  await wb.xlsx.write(res);
+  res.end();
+}
+
+async function generateProfitabilityReportExcel(res, { title, rows, dateRange, currency = 'GHS' }) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'POS System';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('Profitability Report');
+  ws.mergeCells('A1:G1');
+  ws.getCell('A1').value = title;
+  ws.getCell('A1').font = { size: 14, bold: true };
+  ws.getCell('A1').alignment = { horizontal: 'center' };
+
+  ws.mergeCells('A2:G2');
+  ws.getCell('A2').value = `Period: ${dateRange.from} to ${dateRange.to} | Generated: ${new Date().toLocaleString()}`;
+  ws.getCell('A2').alignment = { horizontal: 'center' };
+
+  ws.addRow([]);
+  ws.columns = [
+    { key: 'code', width: 12 },
+    { key: 'name', width: 36 },
+    { key: 'price', width: 14 },
+    { key: 'cost', width: 14 },
+    { key: 'margin', width: 14 },
+    { key: 'qty', width: 12 },
+    { key: 'profit', width: 16 },
+  ];
+
+  const header = ws.addRow(['Code', 'Product Name', `Sell (${currency})`, `Cost (${currency})`, 'Margin', 'Qty Sold', `Profit (${currency})`]);
+  header.font = { bold: true };
+  header.alignment = { horizontal: 'center' };
+
+  rows.forEach((r, i) => {
+    const row = ws.addRow({ code: r.product_id ? `P${r.product_id}` : '', name: r.product_name, price: Number(r.selling_price ?? 0), cost: Number(r.cost_price ?? 0), margin: Number(r.margin ?? 0), qty: Number(r.quantity_sold ?? 0), profit: Number(r.profit ?? 0) });
+    if (i % 2 === 1) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+    ['price', 'cost', 'margin', 'profit'].forEach((k) => { row.getCell(k).numFmt = `"${currency}" #,##0.00`; });
+    row.getCell('qty').numFmt = '#,##0.00';
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="profitability-report.xlsx"');
+  await wb.xlsx.write(res);
+  res.end();
+}
+
+module.exports = { generateSalesReportExcel, generateInventoryReportExcel, generateProductCatalogExcel, generateProfitabilityReportExcel };

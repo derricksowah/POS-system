@@ -1,8 +1,10 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { getInventoryReport, downloadInventoryReportPDF, downloadInventoryReportExcel } from '../../services/reportService.js';
-import PageHeader from '../../components/PageHeader.jsx';
-import Spinner    from '../../components/Spinner.jsx';
-import toast      from 'react-hot-toast';
+import PageHeader            from '../../components/PageHeader.jsx';
+import Spinner               from '../../components/Spinner.jsx';
+import StockReconciliation   from '../../components/StockReconciliation.jsx';
+import toast                 from 'react-hot-toast';
 import { formatCurrency, todayISO } from '../../utils/formatters.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
 
@@ -14,6 +16,18 @@ const STATUS_CLASS = {
   'Zero Movement': 'badge-info',
 };
 
+const INVENTORY_COLUMNS = [
+  { key: 'code', label: 'Product Code', align: 'left' },
+  { key: 'name', label: 'Product Name', align: 'left' },
+  { key: 'unit', label: 'Unit', align: 'left' },
+  { key: 'opening', label: 'Opening Balance', align: 'right' },
+  { key: 'purchased', label: 'Purchases / In', align: 'right' },
+  { key: 'sold', label: 'Sales / Out', align: 'right' },
+  { key: 'closing', label: 'Closing Stock', align: 'right' },
+  { key: 'value', label: 'Stock Value', align: 'right' },
+  { key: 'status', label: 'Status', align: 'center' },
+];
+
 export default function InventoryReport() {
   const { settings } = useSettings();
   const currency = settings.currency || 'GHS';
@@ -23,6 +37,19 @@ export default function InventoryReport() {
   const [filters, setFilters] = useState({ from: todayISO(), to: todayISO() });
   const [search, setSearch]   = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+
+  const [visibleColumns, setVisibleColumns] = useState({
+    code: true,
+    name: true,
+    unit: true,
+    opening: true,
+    purchased: true,
+    sold: true,
+    closing: true,
+    value: true,
+    status: true,
+  });
 
   const load = () => {
     setLoading(true);
@@ -49,8 +76,15 @@ export default function InventoryReport() {
     return matchSearch && matchStatus;
   });
 
+  const activeColumns = INVENTORY_COLUMNS.filter((column) => visibleColumns[column.key]);
+  const visibleRows = filtered;
+  const downloadParams = {
+    ...filters,
+    columns: activeColumns.map((column) => column.key).join(','),
+  };
+
   // Footer totals
-  const totals = filtered.reduce((acc, r) => ({
+  const totals = visibleRows.reduce((acc, r) => ({
     opening:   acc.opening   + Number(r.opening),
     purchased: acc.purchased + Number(r.purchased),
     sold:      acc.sold      + Number(r.sold),
@@ -65,8 +99,11 @@ export default function InventoryReport() {
         subtitle={`Opening + Purchases/In - Sales/Out = Closing (${period.from} to ${period.to})`}
         actions={
           <>
-            <button className="btn btn-outline btn-sm" onClick={() => downloadInventoryReportPDF(filters).catch(() => toast.error('Failed to download PDF.'))}>⬇ PDF</button>
-            <button className="btn btn-success btn-sm" onClick={() => downloadInventoryReportExcel(filters).catch(() => toast.error('Failed to download Excel.'))}>⬇ Excel</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setReconcileOpen(true)}>
+              ⚖ Stock Reconciliation
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => downloadInventoryReportPDF(downloadParams).catch(() => toast.error('Failed to download PDF.'))}>⬇ PDF</button>
+            <button className="btn btn-success btn-sm" onClick={() => downloadInventoryReportExcel(downloadParams).catch(() => toast.error('Failed to download Excel.'))}>⬇ Excel</button>
           </>
         }
       />
@@ -133,13 +170,26 @@ export default function InventoryReport() {
             ))}
           </select>
           <button className="btn btn-primary btn-sm" onClick={load}>Generate</button>
-          {(search || statusFilter) && (
-            <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setStatusFilter(''); }}>
-              ✕ Clear
-            </button>
-          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setStatusFilter(''); }}>
+            ✕ Clear
+          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {INVENTORY_COLUMNS.map((column) => (
+              <label key={column.key} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem' }}>
+                <input
+                  type="checkbox"
+                  checked={visibleColumns[column.key]}
+                  onChange={() => setVisibleColumns({
+                    ...visibleColumns,
+                    [column.key]: !visibleColumns[column.key],
+                  })}
+                />
+                {column.label}
+              </label>
+            ))}
+          </div>
           <span style={{ marginLeft: 'auto', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            {filtered.length} of {rows.length} products
+            {visibleRows.length} of {filtered.length} products
           </span>
           <button className="btn btn-outline btn-sm" onClick={load}>↻ Refresh</button>
         </div>
@@ -150,19 +200,16 @@ export default function InventoryReport() {
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Product Code</th>
-                  <th>Product Name</th>
-                  <th style={{ textAlign: 'right' }}>Opening Balance</th>
-                  <th style={{ textAlign: 'right' }}>Purchases / In</th>
-                  <th style={{ textAlign: 'right' }}>Sales / Out</th>
-                  <th style={{ textAlign: 'right' }}>Closing Stock</th>
-                  <th style={{ textAlign: 'right' }}>Stock Value</th>
-                  <th>Status</th>
+                  <th style={{ width: 40 }}>#</th>
+                  {activeColumns.map((column) => (
+                    <th key={column.key} style={{ textAlign: column.align || 'left' }}>
+                      {column.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r, i) => {
+                {visibleRows.map((r, i) => {
                   const closing = Number(r.closing);
                   const closingColor = closing < 0
                     ? 'var(--danger)'
@@ -175,40 +222,50 @@ export default function InventoryReport() {
                   return (
                     <tr key={r.id} style={{ opacity: r.is_active ? 1 : 0.55 }}>
                       <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{i + 1}</td>
-                      <td><code>{r.code}</code></td>
-                      <td>
-                        <strong>{r.name}</strong>
-                        {!r.is_active && (
-                          <span className="badge badge-gray" style={{ fontSize: '0.68rem', marginLeft: 6 }}>inactive</span>
-                        )}
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.unit}</div>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>{Number(r.opening).toFixed(2)}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--success)', fontWeight: 500 }}>
-                        {Number(r.purchased) > 0 ? `+${Number(r.purchased).toFixed(2)}` : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', color: Number(r.sold) > 0 ? 'var(--danger)' : 'var(--text-muted)', fontWeight: 500 }}>
-                        {Number(r.sold) > 0 ? `−${Number(r.sold).toFixed(2)}` : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <strong style={{ color: closingColor, fontSize: '0.95rem' }}>
-                          {Number(r.closing).toFixed(2)}
-                        </strong>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <strong>{formatCurrency(r.closing_value, currency)}</strong>
-                      </td>
-                      <td>
-                        <span className={`badge ${STATUS_CLASS[r.status] || 'badge-gray'}`}>
-                          {r.status}
-                        </span>
-                      </td>
+                      {activeColumns.map((column) => {
+                        const value = (() => {
+                          switch (column.key) {
+                            case 'code': return <code>{r.code}</code>;
+                            case 'name':
+                              return (
+                                <>
+                                  <strong>{r.name}</strong>
+                                  {!r.is_active && (
+                                    <span className="badge badge-gray" style={{ fontSize: '0.68rem', marginLeft: 6 }}>inactive</span>
+                                  )}
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.unit}</div>
+                                </>
+                              );
+                            case 'unit': return r.unit;
+                            case 'opening': return Number(r.opening).toFixed(2);
+                            case 'purchased': return Number(r.purchased) > 0 ? `+${Number(r.purchased).toFixed(2)}` : '—';
+                            case 'sold': return Number(r.sold) > 0 ? `−${Number(r.sold).toFixed(2)}` : '—';
+                            case 'closing': return (
+                              <strong style={{ color: closingColor, fontSize: '0.95rem' }}>
+                                {Number(r.closing).toFixed(2)}
+                              </strong>
+                            );
+                            case 'value': return <strong>{formatCurrency(r.closing_value, currency)}</strong>;
+                            case 'status': return (
+                              <span className={`badge ${STATUS_CLASS[r.status] || 'badge-gray'}`}>
+                                {r.status}
+                              </span>
+                            );
+                            default: return null;
+                          }
+                        })();
+                        return (
+                          <td key={column.key} style={{ textAlign: column.align || 'left' }}>
+                            {value}
+                          </td>
+                        );
+                      })}
                     </tr>
                   );
                 })}
-                {filtered.length === 0 && (
+                {visibleRows.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center text-muted" style={{ padding: '2rem' }}>
+                    <td colSpan={1 + activeColumns.length} className="text-center text-muted" style={{ padding: '2rem' }}>
                       No products match your filter.
                     </td>
                   </tr>
@@ -216,16 +273,20 @@ export default function InventoryReport() {
               </tbody>
 
               {/* Totals footer */}
-              {filtered.length > 0 && (
+              {visibleRows.length > 0 && (
                 <tfoot>
                   <tr style={{ background: 'var(--primary)', color: '#fff', fontWeight: 700 }}>
-                    <td colSpan={3} style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>TOTALS</td>
-                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{totals.opening.toFixed(2)}</td>
-                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>+{totals.purchased.toFixed(2)}</td>
-                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>−{totals.sold.toFixed(2)}</td>
-                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{totals.closing.toFixed(2)}</td>
-                    <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{formatCurrency(totals.value, currency)}</td>
-                    <td></td>
+                    <td colSpan={1 + activeColumns.filter((col) => !['opening', 'purchased', 'sold', 'closing', 'value'].includes(col.key)).length} style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>TOTALS</td>
+                    {activeColumns.filter((col) => ['opening', 'purchased', 'sold', 'closing', 'value'].includes(col.key)).map((column) => (
+                      <td key={column.key} style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>
+                        {column.key === 'opening' && totals.opening.toFixed(2)}
+                        {column.key === 'purchased' && `+${totals.purchased.toFixed(2)}`}
+                        {column.key === 'sold' && `−${totals.sold.toFixed(2)}`}
+                        {column.key === 'closing' && totals.closing.toFixed(2)}
+                        {column.key === 'value' && formatCurrency(totals.value, currency)}
+                      </td>
+                    ))}
+                    {activeColumns.some((col) => col.key === 'status') && <td></td>}
                   </tr>
                 </tfoot>
               )}
@@ -233,6 +294,12 @@ export default function InventoryReport() {
           </div>
         )}
       </div>
+
+      <StockReconciliation
+        open={reconcileOpen}
+        onClose={() => { setReconcileOpen(false); load(); }}
+      />
     </div>
   );
 }
+

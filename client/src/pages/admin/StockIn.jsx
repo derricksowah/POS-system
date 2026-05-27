@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { getProducts }  from '../../services/productService.js';
 import { stockIn, getStockIns, updateStockIn, deleteStockIn } from '../../services/settingsService.js';
@@ -250,3 +251,4 @@ export default function StockIn() {
     </div>
   );
 }
+

@@ -23,6 +23,14 @@ function normalizeInventoryPeriod({ from, to } = {}) {
   return { from: start, to: end };
 }
 
+function normalizeProductIds(input) {
+  if (!input) return [];
+  const rawIds = Array.isArray(input) ? input : String(input).split(',');
+  return rawIds
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+}
+
 /**
  * Admin dashboard summary.
  */
@@ -121,11 +129,64 @@ async function getSalesReport({ from, to, search = '' } = {}) {
   };
 }
 
+async function getProfitabilityReport({ from, to, search = '' } = {}) {
+  const fromDate = ISO_DATE_RE.test(from || '') ? from : todayISO();
+  const toDate = ISO_DATE_RE.test(to || '') ? to : fromDate;
+  const params = [fromDate, `${toDate} 23:59:59`];
+  const conditions = [
+    `s.created_at >= $1`,
+    `s.created_at <= $2`,
+    `s.status != 'voided'`,
+  ];
+
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(p.name ILIKE $${params.length} OR p.code ILIKE $${params.length})`);
+  }
+
+  const res = await query(`
+    SELECT
+      p.id AS product_id,
+      p.name AS product_name,
+      p.price AS selling_price,
+      p.cost_price,
+      CASE
+        WHEN p.cost_price IS NULL THEN NULL
+        ELSE p.price - p.cost_price
+      END AS margin,
+      COALESCE(SUM(si.quantity), 0) AS quantity_sold,
+      CASE
+        WHEN p.cost_price IS NULL THEN NULL
+        ELSE SUM(si.quantity * (p.price - p.cost_price))
+      END AS profit
+    FROM sale_items si
+    JOIN products p ON p.id = si.product_id
+    JOIN sales s ON s.id = si.sale_id
+    WHERE ${conditions.join(' AND ')}
+    GROUP BY p.id, p.name, p.price, p.cost_price
+    ORDER BY profit DESC NULLS LAST, p.name ASC
+  `, params);
+
+  return {
+    rows: res.rows,
+    period: { from: fromDate, to: toDate },
+  };
+}
+
 /**
  * Inventory report: Opening + Purchases - Sales = Closing.
  */
-async function getInventoryReport({ from, to } = {}) {
+async function getInventoryReport({ from, to, product_ids } = {}) {
   const period = normalizeInventoryPeriod({ from, to });
+  const productIds = normalizeProductIds(product_ids);
+  const conditions = [];
+  const params = [period.from, period.to];
+
+  if (productIds.length) {
+    params.push(productIds);
+    conditions.push(`p.id = ANY($${params.length})`);
+  }
+
   const res = await query(`
     WITH movement_totals AS (
       SELECT
@@ -134,14 +195,21 @@ async function getInventoryReport({ from, to } = {}) {
           WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date < $1::date
           THEN sm.quantity ELSE 0
         END), 0) AS opening,
+        -- Purchased: actual stock-ins + net reconciliation adjustments
+        -- Positive adj increases stock-in total; negative adj reduces it (never touches Sales)
         COALESCE(SUM(CASE
           WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date BETWEEN $1::date AND $2::date
-           AND sm.quantity > 0
+           AND sm.quantity > 0 AND sm.type != 'adjustment'
+          THEN sm.quantity ELSE 0
+        END), 0)
+        + COALESCE(SUM(CASE
+          WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date BETWEEN $1::date AND $2::date
+           AND sm.type = 'adjustment'
           THEN sm.quantity ELSE 0
         END), 0) AS purchased,
         COALESCE(SUM(CASE
           WHEN (sm.created_at AT TIME ZONE '${APP_TIME_ZONE}')::date BETWEEN $1::date AND $2::date
-           AND sm.quantity < 0
+           AND sm.quantity < 0 AND sm.type != 'adjustment'
           THEN ABS(sm.quantity) ELSE 0
         END), 0) AS sold,
         COALESCE(SUM(CASE
@@ -166,8 +234,9 @@ async function getInventoryReport({ from, to } = {}) {
       COALESCE(mt.closing, 0) * p.price AS closing_value
     FROM products p
     LEFT JOIN movement_totals mt ON mt.product_id = p.id
+    ${productIds.length ? `WHERE ${conditions.join(' AND ')}` : ''}
     ORDER BY p.name
-  `, [period.from, period.to]);
+  `, params);
 
   const rows = res.rows.map((row) => {
     let status = 'OK';
@@ -255,4 +324,4 @@ async function getDailyTrend(days = 30) {
   }));
 }
 
-module.exports = { getDashboard, getSalesReport, getInventoryReport, getTodaySalesSummary, getDailyTrend };
+module.exports = { getDashboard, getSalesReport, getProfitabilityReport, getInventoryReport, getTodaySalesSummary, getDailyTrend };

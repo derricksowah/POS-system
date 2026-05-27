@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { getSalesReport, downloadSalesReportPDF, downloadSalesReportExcel } from '../../services/reportService.js';
 import PageHeader  from '../../components/PageHeader.jsx';
@@ -280,3 +281,4 @@ export default function SalesReport() {
     </div>
   );
 }
+

@@ -228,9 +228,54 @@ async function getCurrentStock() {
            COALESCE(s.quantity, 0) AS current_stock
     FROM products p
     LEFT JOIN stock s ON s.product_id = p.id
+    WHERE p.deleted_at IS NULL
     ORDER BY p.name
   `);
   return res.rows;
 }
 
-module.exports = { stockIn, getStockIns, updateStockIn, deleteStockIn, getCurrentStock };
+/**
+ * Apply stock reconciliation adjustments.
+ * For each entry, sets stock to the counted quantity and records an adjustment movement.
+ * Only products with a non-zero delta are touched.
+ */
+async function reconcileStock(adjustments, userId) {
+  return withTransaction(async (client) => {
+    const results = [];
+
+    for (const { productId, countedQuantity } of adjustments) {
+      const stockRes = await client.query(
+        `SELECT quantity FROM stock WHERE product_id = $1 FOR UPDATE`,
+        [productId]
+      );
+      if (!stockRes.rows[0]) continue;
+
+      const recorded = Number(stockRes.rows[0].quantity);
+      const counted  = Number(countedQuantity);
+      const delta    = counted - recorded;
+
+      if (delta === 0) continue;
+
+      await client.query(
+        `UPDATE stock SET quantity = $1, updated_at = NOW() WHERE product_id = $2`,
+        [counted, productId]
+      );
+
+      await client.query(`
+        INSERT INTO stock_movements (product_id, type, quantity, note, created_by)
+        VALUES ($1, 'adjustment', $2, $3, $4)
+      `, [
+        productId,
+        delta,
+        `Stock reconciliation: recorded ${recorded}, counted ${counted}`,
+        userId,
+      ]);
+
+      results.push({ product_id: productId, recorded, counted, delta });
+    }
+
+    return results;
+  });
+}
+
+module.exports = { stockIn, getStockIns, updateStockIn, deleteStockIn, getCurrentStock, reconcileStock };

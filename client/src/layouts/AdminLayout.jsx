@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -11,6 +12,7 @@ const navItems = [
   { to: '/admin/sales',              label: 'Sales Log',        icon: '≡'  },
   { to: '/admin/reports/sales',      label: 'Sales Report',     icon: '↗'  },
   { to: '/admin/reports/inventory',  label: 'Inventory Report', icon: '▦'  },
+  { to: '/admin/reports/profitability', label: 'Profitability Report', icon: '◈' },
   { to: '/admin/users',              label: 'Users',            icon: '👥' },
   { to: '/admin/recycle-bin',        label: 'Recycle Bin',      icon: '🗑' },
   { to: '/admin/settings',           label: 'Settings',         icon: '⚙'  },
@@ -114,3 +116,4 @@ export default function AdminLayout() {
     </div>
   );
 }
+

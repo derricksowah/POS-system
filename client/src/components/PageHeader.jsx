@@ -1,3 +1,4 @@
+import React from 'react';
 export default function PageHeader({ title, subtitle, actions }) {
   return (
     <div className="page-header">
@@ -9,3 +10,4 @@ export default function PageHeader({ title, subtitle, actions }) {
     </div>
   );
 }
+

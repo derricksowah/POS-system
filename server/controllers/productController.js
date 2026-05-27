@@ -1,6 +1,9 @@
 const productService = require('../services/productService');
+const settingsService = require('../services/settingsService');
 const { logActivity } = require('../middleware/activityLogger');
 const { HTTP_STATUS } = require('../config/constants');
+const { generateProductCatalogPDF } = require('../utils/pdfGenerator');
+const { generateProductCatalogExcel } = require('../utils/excelGenerator');
 
 async function list(req, res, next) {
   try {
@@ -117,4 +120,23 @@ async function lowStock(req, res, next) {
   }
 }
 
-module.exports = { list, getOne, create, update, deactivate, activate, deleteProduct, getDeleted, restoreProduct, permanentDelete, lowStock };
+async function exportProducts(req, res, next) {
+  try {
+    const includeInactive = req.query.includeInactive === 'true';
+    const products = await productService.getAllExport({ includeInactive });
+    const settings = await settingsService.getSettings();
+    const currency = settings?.currency || 'GHS';
+    const { format } = req.params;
+    if (format === 'pdf') {
+      return generateProductCatalogPDF(res, { title: `${settings?.shop_name || 'POS'} — Product Catalog`, rows: products, currency });
+    }
+    if (format === 'excel') {
+      return generateProductCatalogExcel(res, { title: `${settings?.shop_name || 'POS'} — Product Catalog`, rows: products, currency });
+    }
+    res.status(400).json({ error: 'Unsupported format.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { list, getOne, create, update, deactivate, activate, deleteProduct, getDeleted, restoreProduct, permanentDelete, lowStock, exportProducts };

@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { getSales, getSale } from '../../services/salesService.js';
 import PageHeader    from '../../components/PageHeader.jsx';
@@ -171,3 +172,4 @@ export default function CashierSalesLog() {
     </div>
   );
 }
+

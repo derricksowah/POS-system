@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, Cell,
@@ -403,3 +404,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

@@ -1,3 +1,4 @@
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 
@@ -13,6 +14,7 @@ import StockIn           from './pages/admin/StockIn.jsx';
 import SalesLog          from './pages/admin/SalesLog.jsx';
 import SalesReport       from './pages/admin/SalesReport.jsx';
 import InventoryReport   from './pages/admin/InventoryReport.jsx';
+import ProfitabilityReport from './pages/admin/ProfitabilityReport.jsx';
 import Settings          from './pages/admin/Settings.jsx';
 import UserManagement    from './pages/admin/UserManagement.jsx';
 import RecycleBin        from './pages/admin/RecycleBin.jsx';
@@ -42,6 +44,7 @@ export default function App() {
         <Route path="sales"     element={<SalesLog />} />
         <Route path="reports/sales"      element={<SalesReport />} />
         <Route path="reports/inventory"  element={<InventoryReport />} />
+        <Route path="reports/profitability" element={<ProfitabilityReport />} />
         <Route path="settings"  element={<Settings />} />
         <Route path="users"       element={<UserManagement />} />
         <Route path="recycle-bin" element={<RecycleBin />} />
@@ -63,3 +66,4 @@ export default function App() {
     </Routes>
   );
 }
+

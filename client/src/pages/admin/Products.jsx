@@ -1,8 +1,10 @@
+import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import {
   getProducts, createProduct, updateProduct,
   deactivateProduct, activateProduct, deleteProduct,
 } from '../../services/productService.js';
+import { downloadProductCatalogExcel, downloadProductCatalogPDF } from '../../services/productService.js';
 import PageHeader    from '../../components/PageHeader.jsx';
 import Modal         from '../../components/Modal.jsx';
 import ConfirmDialog from '../../components/ConfirmDialog.jsx';
@@ -11,7 +13,7 @@ import { formatCurrency, getErrorMessage } from '../../utils/formatters.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import toast from 'react-hot-toast';
 
-const EMPTY = { name: '', price: '', unit: 'pcs', opening_stock: '', low_stock_threshold: '5' };
+const EMPTY = { name: '', price: '', cost_price: '', unit: 'pcs', opening_stock: '', low_stock_threshold: '5' };
 
 export default function Products() {
   const { settings }         = useSettings();
@@ -41,7 +43,14 @@ export default function Products() {
   const openCreate = () => { setEditing(null); setForm(EMPTY); setModalOpen(true); };
   const openEdit   = (p) => {
     setEditing(p);
-    setForm({ name: p.name, price: p.price, unit: p.unit, opening_stock: p.opening_stock, low_stock_threshold: p.low_stock_threshold });
+    setForm({
+      name: p.name,
+      price: p.price,
+      cost_price: p.cost_price ?? '',
+      unit: p.unit,
+      opening_stock: p.opening_stock,
+      low_stock_threshold: p.low_stock_threshold,
+    });
     setModalOpen(true);
   };
 
@@ -49,11 +58,18 @@ export default function Products() {
     e.preventDefault();
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        price: Number(form.price),
+        cost_price: form.cost_price === '' ? null : Number(form.cost_price),
+        low_stock_threshold: Number(form.low_stock_threshold),
+      };
+
       if (editing) {
-        await updateProduct(editing.id, { name: form.name, price: Number(form.price), unit: form.unit, low_stock_threshold: Number(form.low_stock_threshold) });
+        await updateProduct(editing.id, payload);
         toast.success('Product updated.');
       } else {
-        await createProduct({ ...form, price: Number(form.price), opening_stock: Number(form.opening_stock), low_stock_threshold: Number(form.low_stock_threshold) });
+        await createProduct({ ...payload, opening_stock: Number(form.opening_stock) });
         toast.success('Product created.');
       }
       setModalOpen(false);
@@ -93,7 +109,17 @@ export default function Products() {
       <PageHeader
         title="Products"
         subtitle={`${total} product${total !== 1 ? 's' : ''}`}
-        actions={<button className="btn btn-primary" onClick={openCreate}>+ Add Product</button>}
+        actions={
+          <>
+            <button className="btn btn-primary" onClick={openCreate}>+ Add Product</button>
+            <button className="btn btn-outline btn-sm" onClick={() => downloadProductCatalogPDF().catch(() => toast.error('Failed to download product PDF.'))}>
+              Product PDF
+            </button>
+            <button className="btn btn-success btn-sm" onClick={() => downloadProductCatalogExcel().catch(() => toast.error('Failed to download product Excel.'))}>
+              Product Excel
+            </button>
+          </>
+        }
       />
       <div className="page">
 
@@ -117,7 +143,7 @@ export default function Products() {
               <thead>
                 <tr>
                   <th>Code</th><th>Name</th><th>Unit</th>
-                  <th>Price</th><th>Opening</th><th>Current Stock</th><th>Threshold</th><th>Status</th><th>Actions</th>
+                  <th>Price</th><th>Cost Price</th><th>Opening</th><th>Current Stock</th><th>Threshold</th><th>Status</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -127,6 +153,7 @@ export default function Products() {
                     <td><strong>{p.name}</strong></td>
                     <td>{p.unit}</td>
                     <td>{formatCurrency(p.price, currency)}</td>
+                    <td>{p.cost_price == null ? '—' : formatCurrency(p.cost_price, currency)}</td>
                     <td>{p.opening_stock}</td>
                     <td>
                       <strong style={{ color: Number(p.current_stock) <= Number(p.low_stock_threshold) ? 'var(--danger)' : 'var(--success)' }}>
@@ -160,7 +187,7 @@ export default function Products() {
                   </tr>
                 ))}
                 {products.length === 0 && (
-                  <tr><td colSpan={9} className="text-center text-muted" style={{ padding: '2rem' }}>No products found.</td></tr>
+                  <tr><td colSpan={10} className="text-center text-muted" style={{ padding: '2rem' }}>No products found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -219,6 +246,16 @@ export default function Products() {
                 value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required />
             </div>
             <div className="form-group">
+              <label className="form-label">Cost Price ({currency}) *</label>
+              <input type="number" min="0" step="0.01" className="form-input"
+                value={form.cost_price}
+                onChange={(e) => setForm({ ...form, cost_price: e.target.value })}
+                placeholder="0.00"
+                required
+              />
+              <span className="form-hint">Set this to calculate profitability accurately.</span>
+            </div>
+            <div className="form-group">
               <label className="form-label">Opening Stock</label>
               <input type="number" min="0" step="0.01" className="form-input"
                 value={form.opening_stock}
@@ -228,11 +265,11 @@ export default function Products() {
               />
               {!!editing && <span className="form-hint">Cannot change after creation.</span>}
             </div>
-            <div className="form-group">
-              <label className="form-label">Low Stock Alert</label>
-              <input type="number" min="0" step="0.01" className="form-input"
-                value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} />
-            </div>
+          </div>
+          <div className="form-group" style={{ marginTop: '1rem' }}>
+            <label className="form-label">Low Stock Alert</label>
+            <input type="number" min="0" step="0.01" className="form-input"
+              value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} />
           </div>
         </form>
       </Modal>
@@ -265,3 +302,4 @@ export default function Products() {
     </div>
   );
 }
+

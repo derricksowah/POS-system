@@ -8,6 +8,7 @@ router.use(authenticate);
 router.get('/dashboard',                authorize('admin'),            ctrl.dashboard);
 router.get('/sales/:format(json|pdf|excel)', authorize('admin'),       ctrl.salesReport);
 router.get('/inventory/:format(json|pdf|excel)', authorize('admin'),   ctrl.inventoryReport);
+router.get('/profitability/:format(json|pdf|excel)',        authorize('admin'),             ctrl.profitabilityReport);
 router.get('/today',                                                    ctrl.todaySummary);
 router.get('/daily-trend',              authorize('admin'),             ctrl.dailyTrend);
 

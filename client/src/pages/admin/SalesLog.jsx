@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { getSales, getSale, editSale, voidSale, permanentDeleteSale } from '../../services/salesService.js';
 import { getProducts } from '../../services/productService.js';
@@ -310,3 +311,4 @@ export default function SalesLog() {
     </div>
   );
 }
+

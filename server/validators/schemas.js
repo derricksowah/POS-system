@@ -18,6 +18,7 @@ const product = Joi.object({
   code:                Joi.string().trim().max(50).optional(),
   name:                Joi.string().trim().max(200).required(),
   price:               Joi.number().min(0).required(),
+  cost_price:          Joi.number().min(0).allow(null).default(null),
   unit:                Joi.string().trim().max(50).default('pcs'),
   opening_stock:       Joi.number().min(0).default(0),
   low_stock_threshold: Joi.number().min(0).default(5),
@@ -26,6 +27,7 @@ const product = Joi.object({
 const productUpdate = Joi.object({
   name:                Joi.string().trim().max(200).required(),
   price:               Joi.number().min(0).required(),
+  cost_price:          Joi.number().min(0).allow(null).default(null),
   unit:                Joi.string().trim().max(50).default('pcs'),
   low_stock_threshold: Joi.number().min(0).default(5),
 });
@@ -99,6 +101,15 @@ const adminChangePassword = Joi.object({
   new_password: Joi.string().min(8).max(100).required(),
 });
 
+const stockReconciliation = Joi.object({
+  adjustments: Joi.array().items(
+    Joi.object({
+      product_id:       Joi.number().integer().positive().required(),
+      counted_quantity: Joi.number().min(0).required(),
+    })
+  ).min(1).required(),
+});
+
 module.exports = {
   login,
   changePassword,
@@ -110,6 +121,7 @@ module.exports = {
   productUpdate,
   stockIn,
   stockInUpdate,
+  stockReconciliation,
   createSale,
   editSale,
   dateRange,

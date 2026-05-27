@@ -80,4 +80,25 @@ async function currentStock(req, res, next) {
   }
 }
 
-module.exports = { stockIn, getStockIns, updateStockIn, deleteStockIn, currentStock };
+async function reconcileStock(req, res, next) {
+  try {
+    const { adjustments } = req.body;
+    const results = await stockService.reconcileStock(
+      adjustments.map((a) => ({ productId: a.product_id, countedQuantity: a.counted_quantity })),
+      req.user.id
+    );
+    await logActivity({
+      userId:    req.user.id,
+      action:    'STOCK_RECONCILIATION',
+      entity:    'stock',
+      entityId:  null,
+      details:   { adjusted_count: results.length },
+      ipAddress: req.ip,
+    });
+    res.json({ message: `${results.length} product(s) adjusted.`, results });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { stockIn, getStockIns, updateStockIn, deleteStockIn, currentStock, reconcileStock };

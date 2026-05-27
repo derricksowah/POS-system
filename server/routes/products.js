@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/',              ctrl.list);
 router.get('/low-stock',     ctrl.lowStock);
 router.get('/recycle-bin',   authorize('admin'), ctrl.getDeleted);
+router.get('/export/:format(pdf|excel)', authorize('admin'), ctrl.exportProducts);
 router.get('/:id',           ctrl.getOne);
 router.post('/',             authorize('admin'), validate(schemas.product),       ctrl.create);
 router.put('/:id',           authorize('admin'), validate(schemas.productUpdate), ctrl.update);

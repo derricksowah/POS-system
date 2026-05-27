@@ -9,6 +9,9 @@ export const getSalesReport = (params = {}) =>
 export const getInventoryReport = (params = {}) =>
   api.get('/reports/inventory/json', { params }).then((r) => r.data);
 
+export const getProfitabilityReport = (params = {}) =>
+  api.get('/reports/profitability/json', { params }).then((r) => r.data);
+
 export const getTodaySummary = () =>
   api.get('/reports/today').then((r) => r.data);
 
@@ -36,8 +39,18 @@ export const downloadSalesReportPDF = (params = {}) =>
 export const downloadSalesReportExcel = (params = {}) =>
   downloadBlob('/reports/sales/excel', params, `sales-report-${params.from ?? 'all'}.xlsx`);
 
-export const downloadInventoryReportPDF = (params = {}) =>
-  downloadBlob('/reports/inventory/pdf', params, `inventory-report-${params.from ?? 'today'}.pdf`);
+export const downloadInventoryReportPDF = (params = {}) => {
+  const suffix = params.product_ids ? '-selected' : '';
+  return downloadBlob('/reports/inventory/pdf', params, `inventory-report${suffix}-${params.from ?? 'today'}.pdf`);
+};
 
-export const downloadInventoryReportExcel = (params = {}) =>
-  downloadBlob('/reports/inventory/excel', params, `inventory-report-${params.from ?? 'today'}.xlsx`);
+export const downloadInventoryReportExcel = (params = {}) => {
+  const suffix = params.product_ids ? '-selected' : '';
+  return downloadBlob('/reports/inventory/excel', params, `inventory-report${suffix}-${params.from ?? 'today'}.xlsx`);
+};
+// Profitability report downloads
+export const downloadProfitabilityReportPDF = (params = {}) =>
+  downloadBlob('/reports/profitability/pdf', params, `profitability-report-${params.from ?? 'all'}.pdf`);
+
+export const downloadProfitabilityReportExcel = (params = {}) =>
+  downloadBlob('/reports/profitability/excel', params, `profitability-report-${params.from ?? 'all'}.xlsx`);

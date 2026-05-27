@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getProducts } from '../../services/productService.js';
 import { createSale } from '../../services/salesService.js';
@@ -625,3 +626,4 @@ export default function POS() {
     </div>
   );
 }
+

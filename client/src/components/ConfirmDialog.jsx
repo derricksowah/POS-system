@@ -1,3 +1,4 @@
+import React from 'react';
 import Modal from './Modal.jsx';
 
 export default function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'Confirm', danger = false }) {
@@ -19,3 +20,4 @@ export default function ConfirmDialog({ open, onClose, onConfirm, title, message
     </Modal>
   );
 }
+

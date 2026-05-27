@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { getSettings, updateSettings, uploadLogo, deleteLogo } from '../../services/settingsService.js';
 import { changePassword }  from '../../services/authService.js';
@@ -340,3 +341,4 @@ export default function Settings() {
     </div>
   );
 }
+

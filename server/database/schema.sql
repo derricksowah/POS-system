@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS products (
     code                VARCHAR(50) NOT NULL UNIQUE,
     name                VARCHAR(200) NOT NULL,
     price               NUMERIC(12, 2) NOT NULL CHECK (price >= 0),
+    cost_price          NUMERIC(12, 2) DEFAULT NULL CHECK (cost_price IS NULL OR cost_price >= 0),
     unit                VARCHAR(50) NOT NULL DEFAULT 'pcs',
     opening_stock       NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (opening_stock >= 0),
     low_stock_threshold NUMERIC(12, 2) NOT NULL DEFAULT 5 CHECK (low_stock_threshold >= 0),
@@ -56,6 +57,9 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at          TIMESTAMPTZ DEFAULT NULL
 );
+
+ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS cost_price NUMERIC(12, 2) DEFAULT NULL CHECK (cost_price IS NULL OR cost_price >= 0);
 
 ALTER TABLE products
     ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;

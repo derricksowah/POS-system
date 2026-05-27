@@ -70,23 +70,23 @@ async function seed() {
 
     // --- Sample Products ---
     const products = [
-      { code: 'P001', name: 'Mineral Water 500ml', price: 3.50, unit: 'bottle', opening: 200, threshold: 20 },
-      { code: 'P002', name: 'Coca Cola 330ml',     price: 5.00, unit: 'can',    opening: 150, threshold: 15 },
-      { code: 'P003', name: 'Bread Loaf',           price: 12.00, unit: 'loaf',  opening: 50,  threshold: 5  },
-      { code: 'P004', name: 'Eggs (Tray)',           price: 45.00, unit: 'tray',  opening: 30,  threshold: 3  },
-      { code: 'P005', name: 'Cooking Oil 1L',        price: 25.00, unit: 'bottle',opening: 40,  threshold: 5  },
-      { code: 'P006', name: 'Rice 1kg',              price: 18.00, unit: 'bag',   opening: 100, threshold: 10 },
-      { code: 'P007', name: 'Sugar 1kg',             price: 15.00, unit: 'bag',   opening: 80,  threshold: 10 },
-      { code: 'P008', name: 'Milk 500ml',            price: 8.00, unit: 'carton', opening: 60,  threshold: 8  },
+      { code: 'P001', name: 'Mineral Water 500ml', price: 3.50, cost_price: 2.60, unit: 'bottle', opening: 200, threshold: 20 },
+      { code: 'P002', name: 'Coca Cola 330ml',     price: 5.00, cost_price: 3.50, unit: 'can',    opening: 150, threshold: 15 },
+      { code: 'P003', name: 'Bread Loaf',           price: 12.00, cost_price: 8.40, unit: 'loaf',  opening: 50,  threshold: 5  },
+      { code: 'P004', name: 'Eggs (Tray)',           price: 45.00, cost_price: 30.00, unit: 'tray',  opening: 30,  threshold: 3  },
+      { code: 'P005', name: 'Cooking Oil 1L',        price: 25.00, cost_price: 18.00, unit: 'bottle',opening: 40,  threshold: 5  },
+      { code: 'P006', name: 'Rice 1kg',              price: 18.00, cost_price: 12.60, unit: 'bag',   opening: 100, threshold: 10 },
+      { code: 'P007', name: 'Sugar 1kg',             price: 15.00, cost_price: 10.50, unit: 'bag',   opening: 80,  threshold: 10 },
+      { code: 'P008', name: 'Milk 500ml',            price: 8.00, cost_price: 5.60, unit: 'carton', opening: 60,  threshold: 8  },
     ];
 
     for (const p of products) {
       const res = await client.query(`
-        INSERT INTO products (code, name, price, unit, opening_stock, low_stock_threshold)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO products (code, name, price, cost_price, unit, opening_stock, low_stock_threshold)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (code) DO NOTHING
         RETURNING id
-      `, [p.code, p.name, p.price, p.unit, p.opening, p.threshold]);
+      `, [p.code, p.name, p.price, p.cost_price, p.unit, p.opening, p.threshold]);
 
       if (res.rows.length > 0) {
         const productId = res.rows[0].id;

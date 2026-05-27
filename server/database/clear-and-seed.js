@@ -49,23 +49,23 @@ async function clearAndSeed() {
     console.log('📦 Inserting test products...\n');
 
     const testProducts = [
-      { code: 'TEA001', name: 'Black Tea 500g', price: 85.00, unit: 'box', opening_stock: 20, threshold: 5 },
-      { code: 'TEA002', name: 'Green Tea 500g', price: 95.00, unit: 'box', opening_stock: 15, threshold: 5 },
-      { code: 'MILK001', name: 'Fresh Milk 1L', price: 12.00, unit: 'pcs', opening_stock: 50, threshold: 10 },
-      { code: 'BREAD001', name: 'White Bread Loaf', price: 5.00, unit: 'pcs', opening_stock: 40, threshold: 10 },
-      { code: 'BUTTER001', name: 'Creamery Butter 200g', price: 28.00, unit: 'pcs', opening_stock: 25, threshold: 5 },
-      { code: 'SUGAR001', name: 'Sugar 1kg', price: 6.00, unit: 'pcs', opening_stock: 60, threshold: 10 },
-      { code: 'SALT001', name: 'Sea Salt 500g', price: 4.50, unit: 'pcs', opening_stock: 35, threshold: 5 },
-      { code: 'OIL001', name: 'Cooking Oil 1L', price: 18.00, unit: 'bottle', opening_stock: 30, threshold: 5 },
-      { code: 'RICE001', name: 'Jasmine Rice 5kg', price: 45.00, unit: 'bag', opening_stock: 20, threshold: 3 },
-      { code: 'COFFEE001', name: 'Premium Coffee Beans 250g', price: 120.00, unit: 'pcs', opening_stock: 12, threshold: 3 },
-      { code: 'CHOCOLATE001', name: 'Dark Chocolate Bar', price: 15.00, unit: 'pcs', opening_stock: 50, threshold: 10 },
-      { code: 'HONEY001', name: 'Raw Honey 500ml', price: 55.00, unit: 'jar', opening_stock: 18, threshold: 3 },
+      { code: 'TEA001', name: 'Black Tea 500g', price: 85.00, cost_price: 60.00, unit: 'box', opening_stock: 20, threshold: 5 },
+      { code: 'TEA002', name: 'Green Tea 500g', price: 95.00, cost_price: 66.50, unit: 'box', opening_stock: 15, threshold: 5 },
+      { code: 'MILK001', name: 'Fresh Milk 1L', price: 12.00, cost_price: 8.40, unit: 'pcs', opening_stock: 50, threshold: 10 },
+      { code: 'BREAD001', name: 'White Bread Loaf', price: 5.00, cost_price: 3.50, unit: 'pcs', opening_stock: 40, threshold: 10 },
+      { code: 'BUTTER001', name: 'Creamery Butter 200g', price: 28.00, cost_price: 19.60, unit: 'pcs', opening_stock: 25, threshold: 5 },
+      { code: 'SUGAR001', name: 'Sugar 1kg', price: 6.00, cost_price: 4.20, unit: 'pcs', opening_stock: 60, threshold: 10 },
+      { code: 'SALT001', name: 'Sea Salt 500g', price: 4.50, cost_price: 3.15, unit: 'pcs', opening_stock: 35, threshold: 5 },
+      { code: 'OIL001', name: 'Cooking Oil 1L', price: 18.00, cost_price: 12.60, unit: 'bottle', opening_stock: 30, threshold: 5 },
+      { code: 'RICE001', name: 'Jasmine Rice 5kg', price: 45.00, cost_price: 31.50, unit: 'bag', opening_stock: 20, threshold: 3 },
+      { code: 'COFFEE001', name: 'Premium Coffee Beans 250g', price: 120.00, cost_price: 84.00, unit: 'pcs', opening_stock: 12, threshold: 3 },
+      { code: 'CHOCOLATE001', name: 'Dark Chocolate Bar', price: 15.00, cost_price: 10.50, unit: 'pcs', opening_stock: 50, threshold: 10 },
+      { code: 'HONEY001', name: 'Raw Honey 500ml', price: 55.00, cost_price: 38.50, unit: 'jar', opening_stock: 18, threshold: 3 },
     ];
 
     const insertProductQuery = `
-      INSERT INTO products (code, name, price, unit, opening_stock, low_stock_threshold)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO products (code, name, price, cost_price, unit, opening_stock, low_stock_threshold)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id, code, name, price;
     `;
 
@@ -85,6 +85,7 @@ async function clearAndSeed() {
         product.code,
         product.name,
         product.price,
+        product.cost_price,
         product.unit,
         product.opening_stock,
         product.threshold,

@@ -75,12 +75,15 @@ function generateSalesReportPDF(res, { title, dateRange, rows, totals, currency 
 /**
  * Generate an Inventory Report PDF.
  */
-function generateInventoryReportPDF(res, { title, dateRange, rows, currency = 'GHS' }) {
+function generateInventoryReportPDF(res, { title, dateRange, rows, currency = 'GHS', visibleColumns } = {}) {
   const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="inventory-report.pdf"`);
   doc.pipe(res);
+
+  // Default: show all columns if not specified
+  const showCol = (key) => !visibleColumns || visibleColumns.includes(key);
 
   // Header
   doc.fontSize(16).font('Helvetica-Bold').text(title, { align: 'center' });
@@ -90,23 +93,36 @@ function generateInventoryReportPDF(res, { title, dateRange, rows, currency = 'G
   );
   doc.moveDown(1);
 
-  // Column positions (landscape A4 = 841 wide)
-  const cols = { no: 30, code: 55, name: 110, open: 290, pur: 370, sold: 450, close: 530, value: 610, status: 705 };
+  // Column positions (landscape A4 = 841 wide) — adjust based on visible columns
+  let xPos = 30;
+  const cols = { no: xPos };
+  if (showCol('code')) cols.code = xPos += 25;
+  if (showCol('name')) cols.name = xPos += 60;
+  if (showCol('unit')) cols.unit = xPos += 200;
+  if (showCol('opening')) cols.open = xPos += 60;
+  if (showCol('purchased')) cols.pur = xPos += 70;
+  if (showCol('sold')) cols.sold = xPos += 70;
+  if (showCol('closing')) cols.close = xPos += 70;
+  if (showCol('value')) cols.value = xPos += 70;
+  if (showCol('status')) cols.status = xPos += 80;
+
   const rowH = 18;
   let y = doc.y;
+  const pageWidth = 30 + xPos;
 
   // Header row background
-  doc.rect(30, y - 3, 780, rowH).fill('#1e3a5f');
+  doc.rect(30, y - 3, pageWidth - 30, rowH).fill('#1e3a5f');
   doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8.5);
-  doc.text('#',                  cols.no,    y, { width: 22 });
-  doc.text('Product Code',       cols.code,  y, { width: 52 });
-  doc.text('Product Name',       cols.name,  y, { width: 195 });
-  doc.text('Opening',            cols.open,  y, { width: 75, align: 'right' });
-  doc.text('Purchases',          cols.pur,   y, { width: 75, align: 'right' });
-  doc.text('Sales',              cols.sold,  y, { width: 75, align: 'right' });
-  doc.text('Closing',            cols.close, y, { width: 75, align: 'right' });
-  doc.text(`Value (${currency})`, cols.value,y, { width: 90, align: 'right' });
-  doc.text('Status',             cols.status,y, { width: 70 });
+  doc.text('#', cols.no, y, { width: 20 });
+  if (showCol('code')) doc.text('Code', cols.code, y, { width: 55 });
+  if (showCol('name')) doc.text('Name', cols.name, y, { width: 195 });
+  if (showCol('unit')) doc.text('Unit', cols.unit, y, { width: 55 });
+  if (showCol('opening')) doc.text('Opening', cols.open, y, { width: 65, align: 'right' });
+  if (showCol('purchased')) doc.text('Purchases', cols.pur, y, { width: 65, align: 'right' });
+  if (showCol('sold')) doc.text('Sales', cols.sold, y, { width: 65, align: 'right' });
+  if (showCol('closing')) doc.text('Closing', cols.close, y, { width: 65, align: 'right' });
+  if (showCol('value')) doc.text(`Value (${currency})`, cols.value, y, { width: 75, align: 'right' });
+  if (showCol('status')) doc.text('Status', cols.status, y, { width: 70 });
   y += rowH;
   doc.fillColor('#000000');
 
@@ -117,44 +133,158 @@ function generateInventoryReportPDF(res, { title, dateRange, rows, currency = 'G
 
   rows.forEach((row, i) => {
     if (y > 540) { doc.addPage({ layout: 'landscape' }); y = 40; shade = false; }
-    if (shade) doc.rect(30, y - 2, 780, rowH).fill('#f8fafc').stroke('#f8fafc');
+    if (shade) doc.rect(30, y - 2, pageWidth - 30, rowH).fill('#f8fafc').stroke('#f8fafc');
     doc.fillColor('#000000');
 
     const closing = Number(row.closing);
-    doc.text(String(i + 1),                     cols.no,    y, { width: 22 });
-    doc.text(row.code,                           cols.code,  y, { width: 52 });
-    doc.text(row.name,                           cols.name,  y, { width: 195, ellipsis: true });
-    doc.text(Number(row.opening).toFixed(2),     cols.open,  y, { width: 75, align: 'right' });
-    doc.text(Number(row.purchased).toFixed(2),   cols.pur,   y, { width: 75, align: 'right' });
-    doc.text(Number(row.sold).toFixed(2),        cols.sold,  y, { width: 75, align: 'right' });
+    doc.text(String(i + 1), cols.no, y, { width: 20 });
+    if (showCol('code')) doc.text(row.code, cols.code, y, { width: 55 });
+    if (showCol('name')) doc.text(row.name, cols.name, y, { width: 195, ellipsis: true });
+    if (showCol('unit')) doc.text(row.unit || '', cols.unit, y, { width: 55 });
+    if (showCol('opening')) doc.text(Number(row.opening).toFixed(2), cols.open, y, { width: 65, align: 'right' });
+    if (showCol('purchased')) doc.text(Number(row.purchased).toFixed(2), cols.pur, y, { width: 65, align: 'right' });
+    if (showCol('sold')) doc.text(Number(row.sold).toFixed(2), cols.sold, y, { width: 65, align: 'right' });
 
-    // Colour closing stock
-    const closingColor = closing < 0 ? '#b91c1c' : closing === 0 ? '#b91c1c' : '#15803d';
-    doc.fillColor(closingColor);
-    doc.text(closing.toFixed(2),                 cols.close, y, { width: 75, align: 'right' });
-    doc.fillColor('#000000');
-    doc.text(fmt(row.closing_value, currency),   cols.value, y, { width: 90, align: 'right' });
-    doc.text(row.status,                         cols.status,y, { width: 70 });
+    if (showCol('closing')) {
+      const closingColor = closing < 0 ? '#b91c1c' : closing === 0 ? '#b91c1c' : '#15803d';
+      doc.fillColor(closingColor);
+      doc.text(closing.toFixed(2), cols.close, y, { width: 65, align: 'right' });
+      doc.fillColor('#000000');
+    }
 
-    totOpen  += Number(row.opening);
-    totPur   += Number(row.purchased);
-    totSold  += Number(row.sold);
-    totClose += closing;
-    totValue += Number(row.closing_value);
+    if (showCol('value')) doc.text(fmt(row.closing_value, currency), cols.value, y, { width: 75, align: 'right' });
+    if (showCol('status')) doc.text(row.status, cols.status, y, { width: 70 });
+
+    if (showCol('opening')) totOpen += Number(row.opening);
+    if (showCol('purchased')) totPur += Number(row.purchased);
+    if (showCol('sold')) totSold += Number(row.sold);
+    if (showCol('closing')) totClose += closing;
+    if (showCol('value')) totValue += Number(row.closing_value);
     y += rowH;
     shade = !shade;
   });
 
   // Totals footer
-  doc.moveTo(30, y).lineTo(810, y).lineWidth(0.5).stroke('#1e3a5f');
+  doc.moveTo(30, y).lineTo(pageWidth, y).lineWidth(0.5).stroke('#1e3a5f');
   y += 5;
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000');
-  doc.text('TOTALS',                  cols.name,  y, { width: 195 });
-  doc.text(totOpen.toFixed(2),        cols.open,  y, { width: 75, align: 'right' });
-  doc.text(totPur.toFixed(2),         cols.pur,   y, { width: 75, align: 'right' });
-  doc.text(totSold.toFixed(2),        cols.sold,  y, { width: 75, align: 'right' });
-  doc.text(totClose.toFixed(2),       cols.close, y, { width: 75, align: 'right' });
-  doc.text(fmt(totValue, currency),   cols.value, y, { width: 90, align: 'right' });
+  doc.text('TOTALS', cols.name || 30, y);
+  if (showCol('opening')) doc.text(totOpen.toFixed(2), cols.open, y, { width: 65, align: 'right' });
+  if (showCol('purchased')) doc.text(totPur.toFixed(2), cols.pur, y, { width: 65, align: 'right' });
+  if (showCol('sold')) doc.text(totSold.toFixed(2), cols.sold, y, { width: 65, align: 'right' });
+  if (showCol('closing')) doc.text(totClose.toFixed(2), cols.close, y, { width: 65, align: 'right' });
+  if (showCol('value')) doc.text(fmt(totValue, currency), cols.value, y, { width: 75, align: 'right' });
+
+  doc.end();
+}
+
+function generateProductCatalogPDF(res, { title, rows, currency = 'GHS' }) {
+  const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="product-catalog.pdf"`);
+  doc.pipe(res);
+
+  doc.fontSize(16).font('Helvetica-Bold').text(title, { align: 'center' });
+  doc.fontSize(10).font('Helvetica').text(
+    `Generated: ${new Date().toLocaleString()}`,
+    { align: 'center' }
+  );
+  doc.moveDown(1);
+
+  const cols = { code: 40, name: 120, unit: 320, price: 390, stock: 470, status: 530 };
+  const rowH = 18;
+  let y = doc.y;
+
+  doc.rect(40, y - 3, 760, rowH).fill('#1e3a5f');
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9);
+  doc.text('Code', cols.code, y, { width: 60 });
+  doc.text('Name', cols.name, y, { width: 180 });
+  doc.text('Unit', cols.unit, y, { width: 50 });
+  doc.text(`Price (${currency})`, cols.price, y, { width: 70, align: 'right' });
+  doc.text('Stock', cols.stock, y, { width: 60, align: 'right' });
+  doc.text('Status', cols.status, y, { width: 120 });
+  y += rowH;
+  doc.fillColor('#000000');
+
+  let shade = false;
+  for (const row of rows) {
+    if (y > 540) {
+      doc.addPage({ layout: 'landscape' });
+      y = 40;
+      shade = false;
+    }
+    if (shade) doc.rect(40, y - 2, 760, rowH).fill('#f8fafc').stroke('#f8fafc');
+    doc.fillColor('#000000');
+    doc.text(row.code, cols.code, y, { width: 60 });
+    doc.text(row.name, cols.name, y, { width: 180, ellipsis: true });
+    doc.text(row.unit, cols.unit, y, { width: 50 });
+    doc.text(fmt(row.price, currency), cols.price, y, { width: 70, align: 'right' });
+    doc.text(String(row.current_stock), cols.stock, y, { width: 60, align: 'right' });
+    doc.text(row.is_active ? 'Active' : 'Inactive', cols.status, y, { width: 120 });
+    y += rowH;
+    shade = !shade;
+  }
+
+  doc.end();
+}
+
+function generateProfitabilityReportPDF(res, { title, rows, dateRange, currency = 'GHS' }) {
+  const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="profitability-report.pdf"`);
+  doc.pipe(res);
+
+  doc.fontSize(16).font('Helvetica-Bold').text(title, { align: 'center' });
+  doc.fontSize(10).font('Helvetica').text(
+    `Period: ${dateRange.from} to ${dateRange.to} · Generated: ${new Date().toLocaleString()}`,
+    { align: 'center' }
+  );
+  doc.moveDown(1);
+
+  const cols = {
+    code: 40,
+    name: 120,
+    price: 340,
+    cost: 430,
+    margin: 520,
+    qty: 610,
+    profit: 690,
+  };
+  const rowH = 18;
+  let y = doc.y;
+
+  doc.rect(40, y - 3, 720, rowH).fill('#1e3a5f');
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9);
+  doc.text('Code', cols.code, y, { width: 70 });
+  doc.text('Product Name', cols.name, y, { width: 170 });
+  doc.text(`Sell (${currency})`, cols.price, y, { width: 70, align: 'right' });
+  doc.text(`Cost (${currency})`, cols.cost, y, { width: 70, align: 'right' });
+  doc.text('Margin', cols.margin, y, { width: 70, align: 'right' });
+  doc.text('Qty Sold', cols.qty, y, { width: 60, align: 'right' });
+  doc.text(`Profit (${currency})`, cols.profit, y, { width: 80, align: 'right' });
+  y += rowH;
+  doc.fillColor('#000000');
+
+  let shade = false;
+  for (const row of rows) {
+    if (y > 540) {
+      doc.addPage({ layout: 'landscape' });
+      y = 40;
+      shade = false;
+    }
+    if (shade) doc.rect(40, y - 2, 720, rowH).fill('#f8fafc').stroke('#f8fafc');
+    doc.fillColor('#000000');
+    doc.text(row.product_id ? `P${row.product_id}` : '', cols.code, y, { width: 70 });
+    doc.text(row.product_name, cols.name, y, { width: 170, ellipsis: true });
+    doc.text(fmt(row.selling_price, currency), cols.price, y, { width: 70, align: 'right' });
+    doc.text(row.cost_price == null ? 'N/A' : fmt(row.cost_price, currency), cols.cost, y, { width: 70, align: 'right' });
+    doc.text(row.margin == null ? 'N/A' : fmt(row.margin, currency), cols.margin, y, { width: 70, align: 'right' });
+    doc.text(Number(row.quantity_sold || 0).toFixed(2), cols.qty, y, { width: 60, align: 'right' });
+    doc.text(row.profit == null ? 'N/A' : fmt(row.profit, currency), cols.profit, y, { width: 80, align: 'right' });
+    y += rowH;
+    shade = !shade;
+  }
 
   doc.end();
 }
@@ -163,4 +293,9 @@ function fmt(val, currency) {
   return `${currency} ${Number(val).toFixed(2)}`;
 }
 
-module.exports = { generateSalesReportPDF, generateInventoryReportPDF };
+module.exports = {
+  generateSalesReportPDF,
+  generateInventoryReportPDF,
+  generateProductCatalogPDF,
+  generateProfitabilityReportPDF,
+};

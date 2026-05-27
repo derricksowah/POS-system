@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { getTodaySummary } from '../../services/reportService.js';
 import PageHeader           from '../../components/PageHeader.jsx';
@@ -88,3 +89,4 @@ export default function DailySummary() {
     </div>
   );
 }
+

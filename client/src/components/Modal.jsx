@@ -1,3 +1,4 @@
+import React from 'react';
 import { useEffect } from 'react';
 
 export default function Modal({ open, onClose, title, children, footer, maxWidth = 560 }) {
@@ -23,3 +24,4 @@ export default function Modal({ open, onClose, title, children, footer, maxWidth
     </div>
   );
 }
+

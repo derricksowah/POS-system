@@ -1,3 +1,4 @@
+import React from 'react';
 export default function Spinner({ size = 32 }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2rem' }}>
@@ -9,3 +10,4 @@ export default function Spinner({ size = 32 }) {
     </div>
   );
 }
+
