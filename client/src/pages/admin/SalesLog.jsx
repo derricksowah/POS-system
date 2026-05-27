@@ -1,6 +1,7 @@
 import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { getSales, getSale, editSale, voidSale, permanentDeleteSale } from '../../services/salesService.js';
+import { printReceipt } from '../../print/printReceipt.js';
 import { getProducts } from '../../services/productService.js';
 import PageHeader    from '../../components/PageHeader.jsx';
 import Modal         from '../../components/Modal.jsx';
@@ -27,6 +28,7 @@ export default function SalesLog() {
   const [saving, setSaving]       = useState(false);
   const [voidConfirm, setVoidConfirm] = useState({ open: false, sale: null });
   const [permanentConfirm, setPermanentConfirm] = useState({ open: false, sale: null });
+  const [printing, setPrinting] = useState(null);
   const LIMIT = 50;
 
   const load = useCallback(() => {
@@ -108,6 +110,19 @@ export default function SalesLog() {
     }
   };
 
+  const handlePrint = async (saleOrId) => {
+    const id = typeof saleOrId === 'object' ? saleOrId.id : saleOrId;
+    setPrinting(id);
+    try {
+      const sale = detailSale?.id === id ? detailSale : await getSale(id);
+      printReceipt(sale, settings);
+    } catch {
+      toast.error('Failed to load sale for printing.');
+    } finally {
+      setPrinting(null);
+    }
+  };
+
   const pages = Math.ceil(total / LIMIT);
 
   return (
@@ -170,6 +185,14 @@ export default function SalesLog() {
                         <button className="btn btn-outline btn-sm" onClick={() => openDetail(s.id)}>View</button>
                         {s.status !== 'voided' && (
                           <>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() => handlePrint(s)}
+                              disabled={printing === s.id}
+                              title="Print receipt"
+                            >
+                              {printing === s.id ? '…' : '🖨 Print'}
+                            </button>
                             <button className="btn btn-danger btn-sm" onClick={() => setVoidConfirm({ open: true, sale: s })}>Void</button>
                             <button className="btn btn-sm" style={{ color: '#fff', background: '#dc2626' }} onClick={() => setPermanentConfirm({ open: true, sale: s })}>Erase</button>
                           </>
@@ -201,7 +224,16 @@ export default function SalesLog() {
           <>
             <button className="btn btn-ghost" onClick={() => setDetailOpen(false)}>Close</button>
             {detailSale?.status !== 'voided' && (
-              <button className="btn btn-accent" onClick={() => openEdit(detailSale)}>Edit Sale</button>
+              <>
+                <button
+                  className="btn btn-outline"
+                  onClick={() => handlePrint(detailSale)}
+                  disabled={printing === detailSale?.id}
+                >
+                  {printing === detailSale?.id ? 'Loading…' : '🖨 Print Receipt'}
+                </button>
+                <button className="btn btn-accent" onClick={() => openEdit(detailSale)}>Edit Sale</button>
+              </>
             )}
           </>
         }

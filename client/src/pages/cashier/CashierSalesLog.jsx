@@ -1,6 +1,7 @@
 import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { getSales, getSale } from '../../services/salesService.js';
+import { printReceipt } from '../../print/printReceipt.js';
 import PageHeader    from '../../components/PageHeader.jsx';
 import Modal         from '../../components/Modal.jsx';
 import Spinner       from '../../components/Spinner.jsx';
@@ -18,6 +19,7 @@ export default function CashierSalesLog() {
   const [loading, setLoading]     = useState(true);
   const [detailSale, setDetailSale] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [printing, setPrinting] = useState(null);
   const LIMIT = 50;
 
   const load = useCallback(() => {
@@ -40,6 +42,19 @@ export default function CashierSalesLog() {
       setDetailOpen(true);
     } catch (err) {
       toast.error(getErrorMessage(err));
+    }
+  };
+
+  const handlePrint = async (saleOrId) => {
+    const id = typeof saleOrId === 'object' ? saleOrId.id : saleOrId;
+    setPrinting(id);
+    try {
+      const sale = detailSale?.id === id ? detailSale : await getSale(id);
+      printReceipt(sale, settings);
+    } catch {
+      toast.error('Failed to load sale for printing.');
+    } finally {
+      setPrinting(null);
     }
   };
 
@@ -101,7 +116,19 @@ export default function CashierSalesLog() {
                       </span>
                     </td>
                     <td>
-                      <button className="btn btn-outline btn-sm" onClick={() => openDetail(s.id)}>View</button>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button className="btn btn-outline btn-sm" onClick={() => openDetail(s.id)}>View</button>
+                        {s.status !== 'voided' && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            onClick={() => handlePrint(s)}
+                            disabled={printing === s.id}
+                            title="Print receipt"
+                          >
+                            {printing === s.id ? '…' : '🖨 Print'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -125,7 +152,18 @@ export default function CashierSalesLog() {
       {/* Detail Modal — View Only */}
       <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title={`Sale: ${detailSale?.receipt_number}`} maxWidth={700}
         footer={
-          <button className="btn btn-ghost" onClick={() => setDetailOpen(false)}>Close</button>
+          <>
+            <button className="btn btn-ghost" onClick={() => setDetailOpen(false)}>Close</button>
+            {detailSale?.status !== 'voided' && (
+              <button
+                className="btn btn-outline"
+                onClick={() => handlePrint(detailSale)}
+                disabled={printing === detailSale?.id}
+              >
+                {printing === detailSale?.id ? 'Loading…' : '🖨 Print Receipt'}
+              </button>
+            )}
+          </>
         }
       >
         {detailSale && (
